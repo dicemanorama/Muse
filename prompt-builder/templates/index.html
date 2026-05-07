@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Image Prompt Builder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <h1 class="site-title">Image Prompt Builder</h1>
+        <p class="site-subtitle">
+          Select tags, add notes, then generate a refined prompt with your local model.
+        </p>
+      </header>
+
+      <main class="main">
+        <section class="panel" aria-labelledby="repo-heading">
+          <h2 id="repo-heading" class="panel-title">Subject Matter Repo</h2>
+          <div class="repo-row">
+            <select id="repo-select" class="param-select" aria-label="Active repo"></select>
+            <button type="button" class="btn" id="repo-new-btn">New</button>
+            <button type="button" class="btn" id="repo-edit-btn">Edit</button>
+          </div>
+          <div id="roll-result" class="roll-result" hidden>
+            <span id="roll-subject-badge" class="roll-badge"></span>
+            <span id="roll-style-badge" class="roll-badge"></span>
+          </div>
+          <button type="button" class="btn btn-primary" id="roll-btn">
+            🎲 Roll
+          </button>
+          <button type="button" class="btn btn-ghost" id="roll-clear-btn">
+            Clear
+          </button>
+        </section>
+
+        <section class="panel" aria-labelledby="tags-heading">
+          <h2 id="tags-heading" class="panel-title">Tags</h2>
+          {% for category, values in tags.items() %}
+          <div class="tag-group">
+            <div class="tag-group-header">
+              <h3 class="category-label">{{ category }}</h3>
+              <button
+                type="button"
+                class="btn btn-mini tag-category-randomize-btn"
+                data-category="{{ category | e }}"
+                aria-label="Randomize {{ category }} tag"
+              >
+                Randomize
+              </button>
+            </div>
+            <select
+              class="param-select tag-select"
+              data-category="{{ category | e }}"
+              aria-label="{{ category }} tag"
+            >
+              <option value="">(none)</option>
+              {% for value in values %}
+              <option value="{{ value | e }}">{{ value }}</option>
+              {% endfor %}
+            </select>
+            <div class="custom-tag-list" aria-live="polite"></div>
+            <div class="custom-tag-row">
+              <input
+                type="text"
+                class="custom-tag-input"
+                data-category="{{ category | e }}"
+                placeholder="Custom tag…"
+                autocomplete="off"
+                aria-label="Add custom {{ category }} tag"
+              />
+              <button type="button" class="btn custom-tag-add">Add</button>
+            </div>
+          </div>
+          {% endfor %}
+          <button type="button" class="btn" id="tags-randomize-btn">
+            Randomize All
+          </button>
+        </section>
+
+        <section class="panel" aria-labelledby="extras-heading">
+          <h2 id="extras-heading" class="panel-title">Extras</h2>
+          <label class="field-label" for="free-text">Free text</label>
+          <textarea
+            id="free-text"
+            class="free-text"
+            name="free_text"
+            rows="3"
+            placeholder="Optional: mood, subject details, or anything not covered by tags."
+            autocomplete="off"
+          ></textarea>
+
+          <p class="field-label" id="output-mode-label">Output mode</p>
+          <div
+            id="output-mode-toggle"
+            class="output-mode-toggle"
+            role="group"
+            aria-labelledby="output-mode-label"
+          >
+            <button
+              type="button"
+              class="output-mode-option is-active"
+              data-mode="mj"
+              aria-pressed="true"
+            >
+              Midjourney
+            </button>
+            <button
+              type="button"
+              class="output-mode-option"
+              data-mode="sdxl"
+              aria-pressed="false"
+            >
+              SDXL / ComfyUI
+            </button>
+          </div>
+
+          <div id="mj-params" class="param-panel">
+            <fieldset class="param-fieldset">
+              <legend class="field-label">Midjourney parameters</legend>
+              <div class="param-row">
+                <label class="param-label" for="mj-version">Version</label>
+                <select id="mj-version" class="param-select">
+                  <option value="--v 7" selected>--v 7 (default)</option>
+                </select>
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="mj-quality">Quality</label>
+                <select id="mj-quality" class="param-select">
+                  <option value="--q 1" selected>--q 1</option>
+                  <option value="--q 2">--q 2</option>
+                  <option value="--q 4">--q 4</option>
+                </select>
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="mj-style">Style</label>
+                <select id="mj-style" class="param-select">
+                  <option value="">(none)</option>
+                  <option value="--style raw">--style raw</option>
+                </select>
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="mj-stylize">Stylize (--s)</label>
+                <select id="mj-stylize" class="param-select">
+                  <option value="50">50 (literal)</option>
+                  <option value="100" selected>100 (balanced - default)</option>
+                  <option value="250">250 (artistic)</option>
+                  <option value="500">500 (dramatic)</option>
+                  <option value="750">750 (highly creative)</option>
+                  <option value="1000">1000 (max stylize)</option>
+                </select>
+              </div>
+              <p class="param-help">Stylize: Higher values produce more artistic interpretation.</p>
+              <div class="param-row">
+                <label class="param-label" for="mj-chaos">Chaos (--c)</label>
+                <select id="mj-chaos" class="param-select">
+                  <option value="0">0 (consistent)</option>
+                  <option value="20" selected>20 (mild - default)</option>
+                  <option value="50">50 (creative)</option>
+                  <option value="100">100 (wild)</option>
+                </select>
+              </div>
+              <p class="param-help">Chaos: Higher values increase variation and unpredictability.</p>
+              <div class="param-row">
+                <label class="param-label" for="mj-weird">Weird (--w)</label>
+                <select id="mj-weird" class="param-select">
+                  <option value="0">0 (none)</option>
+                  <option value="250">250 (subtle quirk)</option>
+                  <option value="500" selected>500 (creative edge - default)</option>
+                  <option value="800">800 (surreal)</option>
+                  <option value="1200">1200 (maximum weird)</option>
+                </select>
+              </div>
+              <p class="param-help">Weird: Higher values push more unconventional compositions.</p>
+            </fieldset>
+          </div>
+
+          <div id="sdxl-params" class="param-panel" hidden>
+            <fieldset class="param-fieldset">
+              <legend class="field-label">SDXL parameters</legend>
+              <div class="param-row">
+                <label class="param-label" for="sdxl-steps">Steps</label>
+                <input
+                  type="number"
+                  id="sdxl-steps"
+                  class="param-input"
+                  min="1"
+                  max="150"
+                  value="25"
+                />
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="sdxl-cfg">CFG Scale</label>
+                <input
+                  type="number"
+                  id="sdxl-cfg"
+                  class="param-input"
+                  min="0"
+                  max="30"
+                  step="0.5"
+                  value="7"
+                />
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="sdxl-sampler">Sampler</label>
+                <select id="sdxl-sampler" class="param-select">
+                  <option value="euler_a">euler_a</option>
+                  <option value="dpm++_2m" selected>dpm++_2m</option>
+                  <option value="dpm++_2m_karras">dpm++_2m_karras</option>
+                  <option value="ddim">ddim</option>
+                </select>
+              </div>
+              <div class="param-row">
+                <label class="param-label" for="sdxl-scheduler">Scheduler</label>
+                <select id="sdxl-scheduler" class="param-select">
+                  <option value="normal">normal</option>
+                  <option value="karras" selected>karras</option>
+                  <option value="exponential">exponential</option>
+                </select>
+              </div>
+            </fieldset>
+          </div>
+
+          <fieldset class="aspect-fieldset">
+            <legend class="field-label">Aspect ratio (reference only)</legend>
+            <div class="aspect-options" id="aspect-ratio-group">
+              <label class="aspect-option">
+                <input type="radio" name="aspect_ratio" value="1:1" checked />
+                <span>1:1</span>
+              </label>
+              <label class="aspect-option">
+                <input type="radio" name="aspect_ratio" value="3:2" />
+                <span>3:2</span>
+              </label>
+              <label class="aspect-option">
+                <input type="radio" name="aspect_ratio" value="16:9" />
+                <span>16:9</span>
+              </label>
+              <label class="aspect-option">
+                <input type="radio" name="aspect_ratio" value="9:16" />
+                <span>9:16</span>
+              </label>
+              <label class="aspect-option">
+                <input type="radio" name="aspect_ratio" value="4:5" />
+                <span>4:5</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="actions">
+            <div class="model-picker">
+              <label class="param-label" for="model-select">Model</label>
+              <select id="model-select" class="param-select" aria-label="Ollama model">
+                <option value="hermes3:8b">hermes3:8b</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-primary" id="generate-btn">
+              Generate Prompt
+            </button>
+          </div>
+          <p
+            id="model-status"
+            class="model-status"
+            role="status"
+            aria-live="polite"
+            data-state="idle"
+          ></p>
+          <p
+            id="generation-status"
+            class="generation-status"
+            role="status"
+            aria-live="polite"
+            hidden
+          >
+            <span class="generation-status__dot" aria-hidden="true"></span>
+            <span id="generation-status-text">Thinking...</span>
+          </p>
+        </section>
+
+        <section class="panel output-panel" aria-labelledby="output-heading">
+          <h2 id="output-heading" class="panel-title">Generated prompt</h2>
+          <p class="aspect-ref" id="aspect-ref">
+            Aspect ratio: <span id="aspect-display">1:1</span>
+          </p>
+          <label class="field-label" for="output-positive">Prompt</label>
+          <textarea
+            id="output-positive"
+            class="output"
+            readonly
+            rows="10"
+            placeholder="Streamed prompt will appear here."
+          ></textarea>
+          <div class="output-inline-actions">
+            <button type="button" class="btn" id="copy-positive-btn">
+              Copy Prompt
+            </button>
+            <button
+              type="button"
+              class="btn btn-refine"
+              id="refine-btn"
+              disabled
+              aria-label="Refine the current prompt with the LLM"
+            >
+              <span class="btn-refine__icon" aria-hidden="true">&#x2728;</span>
+              Refine Prompt
+            </button>
+          </div>
+          <div id="output-negative-wrap" class="output-negative-wrap" hidden>
+            <label class="field-label" for="output-negative">Negative Prompt</label>
+            <textarea
+              id="output-negative"
+              class="output"
+              readonly
+              rows="9"
+              placeholder="Negative prompt (SDXL mode)."
+            ></textarea>
+            <div class="output-inline-actions">
+              <button type="button" class="btn" id="copy-negative-btn">
+                Copy Negative
+              </button>
+            </div>
+          </div>
+          <div id="output-settings-wrap" class="output-settings-wrap" hidden>
+            <label class="field-label" for="output-settings">Generation settings</label>
+            <textarea
+              id="output-settings"
+              class="output"
+              readonly
+              rows="6"
+              placeholder="Generation settings (SDXL mode)."
+            ></textarea>
+          </div>
+          <div class="output-actions">
+            <button
+              type="button"
+              class="btn btn-favorite"
+              id="save-favorite-btn"
+              hidden
+              aria-label="Save current prompt as a favorite"
+            >
+              <span class="btn-favorite__icon" aria-hidden="true">&#x2605;</span>
+              Save as Favorite
+            </button>
+            <button type="button" class="btn btn-ghost" id="clear-btn">
+              Clear All
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="panel favorites-panel"
+          aria-labelledby="favorites-heading"
+        >
+          <h2 id="favorites-heading" class="panel-title">Favorites</h2>
+          <p id="favorites-empty" class="favorites-empty">
+            No favorites saved yet. Generate a prompt and click
+            <span aria-hidden="true">&#x2605;</span> Save as Favorite to keep it
+            here.
+          </p>
+          <div id="favorites-list" class="favorites-list" role="list"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="repo-modal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="repo-modal-title">
+        <h3 id="repo-modal-title" class="panel-title">Edit repo</h3>
+        <label class="field-label" for="repo-name-input">Name</label>
+        <input id="repo-name-input" type="text" class="custom-tag-input" autocomplete="off" />
+        <label class="field-label" for="repo-subjects-input">Subjects</label>
+        <textarea
+          id="repo-subjects-input"
+          class="free-text"
+          rows="3"
+          placeholder="comma-separated"
+        ></textarea>
+        <label class="field-label" for="repo-styles-input">Styles</label>
+        <textarea
+          id="repo-styles-input"
+          class="free-text"
+          rows="3"
+          placeholder="comma-separated"
+        ></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="repo-delete-btn">
+            Delete
+          </button>
+          <div class="modal-actions-right">
+            <button type="button" class="btn" id="repo-cancel-btn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="repo-save-btn">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="favorite-save-modal" class="modal" hidden>
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="favorite-modal-title"
+      >
+        <h3 id="favorite-modal-title" class="panel-title">Save favorite</h3>
+        <label class="field-label" for="favorite-name-input">Name</label>
+        <input
+          id="favorite-name-input"
+          type="text"
+          class="custom-tag-input"
+          autocomplete="off"
+          maxlength="80"
+          placeholder="e.g. Misty dragon landscape"
+        />
+        <p class="field-help" id="favorite-name-error" hidden role="alert">
+          Please enter a name.
+        </p>
+        <div class="modal-actions">
+          <div></div>
+          <div class="modal-actions-right">
+            <button type="button" class="btn" id="favorite-cancel-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn btn-primary" id="favorite-confirm-btn">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  </body>
+</html>

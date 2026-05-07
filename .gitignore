@@ -1,0 +1,5 @@
+.env
+groq.txt
+__pycache__/
+venv/
+*.pyc
