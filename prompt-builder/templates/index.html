@@ -16,80 +16,8 @@
       </header>
 
       <main class="main">
-        <section class="panel" aria-labelledby="repo-heading">
-          <h2 id="repo-heading" class="panel-title">Subject Matter Repo</h2>
-          <div class="repo-row">
-            <select id="repo-select" class="param-select" aria-label="Active repo"></select>
-            <button type="button" class="btn" id="repo-new-btn">New</button>
-            <button type="button" class="btn" id="repo-edit-btn">Edit</button>
-          </div>
-          <div id="roll-result" class="roll-result" hidden>
-            <span id="roll-subject-badge" class="roll-badge"></span>
-            <span id="roll-style-badge" class="roll-badge"></span>
-          </div>
-          <button type="button" class="btn btn-primary" id="roll-btn">
-            🎲 Roll
-          </button>
-          <button type="button" class="btn btn-ghost" id="roll-clear-btn">
-            Clear
-          </button>
-        </section>
-
-        <section class="panel" aria-labelledby="tags-heading">
-          <h2 id="tags-heading" class="panel-title">Tags</h2>
-          {% for category, values in tags.items() %}
-          <div class="tag-group">
-            <div class="tag-group-header">
-              <h3 class="category-label">{{ category }}</h3>
-              <button
-                type="button"
-                class="btn btn-mini tag-category-randomize-btn"
-                data-category="{{ category | e }}"
-                aria-label="Randomize {{ category }} tag"
-              >
-                Randomize
-              </button>
-            </div>
-            <select
-              class="param-select tag-select"
-              data-category="{{ category | e }}"
-              aria-label="{{ category }} tag"
-            >
-              <option value="">(none)</option>
-              {% for value in values %}
-              <option value="{{ value | e }}">{{ value }}</option>
-              {% endfor %}
-            </select>
-            <div class="custom-tag-list" aria-live="polite"></div>
-            <div class="custom-tag-row">
-              <input
-                type="text"
-                class="custom-tag-input"
-                data-category="{{ category | e }}"
-                placeholder="Custom tag…"
-                autocomplete="off"
-                aria-label="Add custom {{ category }} tag"
-              />
-              <button type="button" class="btn custom-tag-add">Add</button>
-            </div>
-          </div>
-          {% endfor %}
-          <button type="button" class="btn" id="tags-randomize-btn">
-            Randomize All
-          </button>
-        </section>
-
-        <section class="panel" aria-labelledby="extras-heading">
-          <h2 id="extras-heading" class="panel-title">Extras</h2>
-          <label class="field-label" for="free-text">Free text</label>
-          <textarea
-            id="free-text"
-            class="free-text"
-            name="free_text"
-            rows="3"
-            placeholder="Optional: mood, subject details, or anything not covered by tags."
-            autocomplete="off"
-          ></textarea>
+        <section class="panel" aria-labelledby="platform-heading">
+          <h2 id="platform-heading" class="panel-title">Platform</h2>
 
           <p class="field-label" id="output-mode-label">Output mode</p>
           <div
@@ -247,7 +175,100 @@
               </label>
             </div>
           </fieldset>
+        </section>
 
+        <section class="panel" aria-labelledby="tags-heading">
+          <h2 id="tags-heading" class="panel-title">Tags</h2>
+          {% for category, values in tags.items() %}
+          <div class="tag-group">
+            <div class="tag-group-header">
+              <h3 class="category-label">{{ category }}</h3>
+              <button
+                type="button"
+                class="btn btn-mini tag-category-randomize-btn"
+                data-category="{{ category | e }}"
+                aria-label="Randomize {{ category }} tag"
+              >
+                Randomize
+              </button>
+            </div>
+            <select
+              class="param-select tag-select"
+              data-category="{{ category | e }}"
+              aria-label="{{ category }} tag"
+            >
+              <option value="">(none)</option>
+              {% for value in values %}
+              <option value="{{ value | e }}">{{ value }}</option>
+              {% endfor %}
+            </select>
+            <div class="template-list" data-category="{{ category | e }}" aria-live="polite"></div>
+            <div class="template-row">
+              <select
+                class="param-select category-template-select"
+                data-category="{{ category | e }}"
+                aria-label="{{ category }} template"
+              >
+                <option value="">(select template)</option>
+                {% for template in category_templates.get(category, []) %}
+                <option
+                  value="{{ template.id | e }}"
+                  data-template-tags="{{ template.tags | join(' || ') | e }}"
+                >
+                  {{ template.label }}{% if template.is_predefined %} (predefined){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <button
+                type="button"
+                class="btn template-add-btn"
+                data-category="{{ category | e }}"
+              >
+                Add Template
+              </button>
+              <button
+                type="button"
+                class="btn template-create-open-btn"
+                data-category="{{ category | e }}"
+                aria-label="Create {{ category }} template"
+              >
+                Create Template
+              </button>
+            </div>
+            <div class="custom-tag-list" aria-live="polite"></div>
+            <div class="custom-tag-row">
+              <input
+                type="text"
+                class="custom-tag-input"
+                data-category="{{ category | e }}"
+                placeholder="Custom tag…"
+                autocomplete="off"
+                aria-label="Add custom {{ category }} tag"
+              />
+              <button type="button" class="btn custom-tag-add">Add</button>
+            </div>
+          </div>
+          {% endfor %}
+          <button type="button" class="btn" id="tags-randomize-btn">
+            Randomize All
+          </button>
+        </section>
+
+        <section class="panel" aria-labelledby="freetext-heading">
+          <h2 id="freetext-heading" class="panel-title">Free Text</h2>
+          <label class="field-label" for="free-text">Free text</label>
+          <textarea
+            id="free-text"
+            class="free-text"
+            name="free_text"
+            rows="3"
+            placeholder="Optional: mood, subject details, or anything not covered by tags."
+            autocomplete="off"
+          ></textarea>
+        </section>
+
+        <section class="panel" aria-labelledby="model-controls-heading">
+          <h2 id="model-controls-heading" class="panel-title">Model</h2>
           <div class="actions">
             <div class="model-picker">
               <label class="param-label" for="model-select">Model</label>
@@ -280,6 +301,12 @@
 
         <section class="panel output-panel" aria-labelledby="output-heading">
           <h2 id="output-heading" class="panel-title">Generated prompt</h2>
+          <p
+            id="output-generated-title"
+            class="output-generated-title"
+            hidden
+            aria-live="polite"
+          ></p>
           <p class="aspect-ref" id="aspect-ref">
             Aspect ratio: <span id="aspect-display">1:1</span>
           </p>
@@ -363,39 +390,6 @@
       </main>
     </div>
 
-    <div id="repo-modal" class="modal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="repo-modal-title">
-        <h3 id="repo-modal-title" class="panel-title">Edit repo</h3>
-        <label class="field-label" for="repo-name-input">Name</label>
-        <input id="repo-name-input" type="text" class="custom-tag-input" autocomplete="off" />
-        <label class="field-label" for="repo-subjects-input">Subjects</label>
-        <textarea
-          id="repo-subjects-input"
-          class="free-text"
-          rows="3"
-          placeholder="comma-separated"
-        ></textarea>
-        <label class="field-label" for="repo-styles-input">Styles</label>
-        <textarea
-          id="repo-styles-input"
-          class="free-text"
-          rows="3"
-          placeholder="comma-separated"
-        ></textarea>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" id="repo-delete-btn">
-            Delete
-          </button>
-          <div class="modal-actions-right">
-            <button type="button" class="btn" id="repo-cancel-btn">Cancel</button>
-            <button type="button" class="btn btn-primary" id="repo-save-btn">
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div id="favorite-save-modal" class="modal" hidden>
       <div
         class="modal-card"
@@ -430,6 +424,43 @@
       </div>
     </div>
 
+    <div id="template-create-modal" class="modal" hidden>
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-create-modal-title"
+      >
+        <h3 id="template-create-modal-title" class="panel-title">Create template</h3>
+        <label class="field-label" for="template-create-name-input">Name</label>
+        <input
+          id="template-create-name-input"
+          type="text"
+          class="custom-tag-input"
+          autocomplete="off"
+          maxlength="120"
+          placeholder="e.g. Evening portrait set"
+        />
+        <p class="field-help" id="template-create-name-error" hidden role="alert">
+          Please enter a name.
+        </p>
+        <div class="modal-actions">
+          <div></div>
+          <div class="modal-actions-right">
+            <button type="button" class="btn" id="template-create-cancel-btn">
+              Cancel
+            </button>
+            <button type="button" class="btn btn-primary" id="template-create-confirm-btn">
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.CATEGORY_TEMPLATES = {{ category_templates | tojson }};
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   </body>
 </html>

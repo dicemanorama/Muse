@@ -3,13 +3,21 @@
 
   const selectedTags = new Set();
   const selectedDropdownTags = new Map();
+  const selectedTemplatesByCategory = new Map();
+  const selectedCustomTagsByCategory = new Map();
+  const selectedTemplateTagsByCategory = new Map();
+  const templateCatalogByCategory = new Map();
 
   let currentMode = "mj";
+  let outputTitleGenerationSeq = 0;
 
   const freeTextEl = document.getElementById("free-text");
   const outputPositive = document.getElementById("output-positive");
   const outputNegative = document.getElementById("output-negative");
   const outputSettings = document.getElementById("output-settings");
+  const outputGeneratedTitleEl = document.getElementById(
+    "output-generated-title"
+  );
   const outputNegativeWrap = document.getElementById("output-negative-wrap");
   const outputSettingsWrap = document.getElementById("output-settings-wrap");
   const generateBtn = document.getElementById("generate-btn");
@@ -40,11 +48,15 @@
   );
   const modeOptions = document.querySelectorAll(".output-mode-option");
   const tagSelectEls = Array.from(document.querySelectorAll(".tag-select"));
+  const categoryTemplateSelectEls = Array.from(
+    document.querySelectorAll(".category-template-select")
+  );
+  const templateListEls = Array.from(document.querySelectorAll(".template-list"));
   const tagCategoryRandomizeBtns = Array.from(
     document.querySelectorAll(".tag-category-randomize-btn")
   );
   const tagsRandomizeBtn = document.getElementById("tags-randomize-btn");
-  const DEFAULT_MODEL = "hermes3:8b";
+  const DEFAULT_MODEL = "llama-3.1-8b-instant";
 
   const warmModels = new Set();
   let warmupSeq = 0;
@@ -54,14 +66,90 @@
 
   const SELECTED_CLASS = "is-selected";
 
+  const categoryTemplatesBootstrap =
+    (window.CATEGORY_TEMPLATES && typeof window.CATEGORY_TEMPLATES === "object")
+      ? window.CATEGORY_TEMPLATES
+      : {};
+
+  function getCategoryTemplateMap(category) {
+    if (!templateCatalogByCategory.has(category)) {
+      templateCatalogByCategory.set(category, new Map());
+    }
+    return templateCatalogByCategory.get(category);
+  }
+
+  function registerTemplate(template) {
+    if (!template || typeof template !== "object") return;
+    const category = String(template.category || "").trim();
+    const id = String(template.id || "").trim();
+    if (!category || !id) return;
+    const map = getCategoryTemplateMap(category);
+    map.set(id, {
+      id: id,
+      label: String(template.label || id).trim() || id,
+      category: category,
+      tags: Array.isArray(template.tags)
+        ? template.tags.map(function (tag) {
+            return String(tag || "").trim();
+          }).filter(Boolean)
+        : [],
+      is_predefined: template.is_predefined === true,
+    });
+  }
+
+  Object.keys(categoryTemplatesBootstrap).forEach(function (category) {
+    const items = categoryTemplatesBootstrap[category];
+    if (!Array.isArray(items)) return;
+    items.forEach(function (item) {
+      registerTemplate(item);
+    });
+  });
+
   function syncSelectedTags() {
     selectedTags.clear();
+    selectedCustomTagsByCategory.clear();
+    selectedTemplateTagsByCategory.clear();
+
     selectedDropdownTags.forEach(function (value) {
       if (value) selectedTags.add(value);
     });
-    document.querySelectorAll(".tag-btn-custom." + SELECTED_CLASS).forEach(function (btn) {
-      const tag = (btn.getAttribute("data-tag") || "").trim();
-      if (tag) selectedTags.add(tag);
+    document.querySelectorAll(".tag-group").forEach(function (group) {
+      const selectEl = group.querySelector(".tag-select");
+      const category = selectEl
+        ? (selectEl.getAttribute("data-category") || "").trim()
+        : "";
+      if (!category) return;
+
+      const customTags = Array.from(
+        group.querySelectorAll(".tag-btn-custom." + SELECTED_CLASS)
+      )
+        .map(function (btn) {
+          return (btn.getAttribute("data-tag") || "").trim();
+        })
+        .filter(Boolean);
+      if (customTags.length) {
+        selectedCustomTagsByCategory.set(category, customTags);
+        customTags.forEach(function (tag) {
+          selectedTags.add(tag);
+        });
+      }
+
+      const selectedTemplateIds = selectedTemplatesByCategory.get(category) || [];
+      const templateMap = getCategoryTemplateMap(category);
+      const templateTags = [];
+      selectedTemplateIds.forEach(function (templateId) {
+        const entry = templateMap.get(templateId);
+        if (!entry || !Array.isArray(entry.tags)) return;
+        entry.tags.forEach(function (tag) {
+          const safe = String(tag || "").trim();
+          if (!safe) return;
+          templateTags.push(safe);
+          selectedTags.add(safe);
+        });
+      });
+      if (templateTags.length) {
+        selectedTemplateTagsByCategory.set(category, templateTags);
+      }
     });
   }
 
@@ -117,9 +205,11 @@
   }
 
   function clearOutputs() {
+    outputTitleGenerationSeq += 1;
     if (outputPositive) outputPositive.value = "";
     if (outputNegative) outputNegative.value = "";
     if (outputSettings) outputSettings.value = "";
+    applyGeneratedTitle("");
     setOutputHasContent(false);
   }
 
@@ -130,14 +220,91 @@
     return String(text).replace(MJ_FLAG_RE, "").trim();
   }
 
+  function isBrokenPromptOutput(text) {
+    const s = String(text || "").trim();
+    if (!s) return true;
+    if (/^\[Request failed:/i.test(s)) return true;
+    if (/^\[Error:/i.test(s)) return true;
+    if (/^\[Refine failed:/i.test(s)) return true;
+    if (/^\[Refine error:/i.test(s)) return true;
+    return false;
+  }
+
+  function fallbackTitleFromPrompt(positiveForTitle) {
+    const raw = String(positiveForTitle || "").replace(/\s+/g, " ").trim();
+    if (!raw) return "";
+    const max = 72;
+    if (raw.length <= max) return raw;
+    return raw.slice(0, max).trim() + "\u2026";
+  }
+
+  function applyGeneratedTitle(text) {
+    if (!outputGeneratedTitleEl) return;
+    const t = String(text || "").trim();
+    if (!t) {
+      outputGeneratedTitleEl.hidden = true;
+      outputGeneratedTitleEl.textContent = "";
+      return;
+    }
+    outputGeneratedTitleEl.hidden = false;
+    outputGeneratedTitleEl.textContent = t;
+  }
+
+  function scheduleGeneratedTitleFromOutput(modelName) {
+    outputTitleGenerationSeq += 1;
+    const seq = outputTitleGenerationSeq;
+    const rawPositive = outputPositive ? outputPositive.value : "";
+    const trimmed = rawPositive.trim();
+    if (!trimmed || isBrokenPromptOutput(trimmed)) {
+      applyGeneratedTitle("");
+      return;
+    }
+    const base =
+      currentMode === "mj" ? stripMjFlags(rawPositive) : trimmed;
+    const promptForApi = base.trim();
+    if (!promptForApi) {
+      applyGeneratedTitle(fallbackTitleFromPrompt(trimmed));
+      return;
+    }
+    if (outputGeneratedTitleEl) {
+      outputGeneratedTitleEl.hidden = false;
+      outputGeneratedTitleEl.textContent = "\u2026";
+    }
+    const activeModel =
+      modelName ||
+      (modelSelect && modelSelect.value ? modelSelect.value : DEFAULT_MODEL);
+    (async function () {
+      try {
+        const resp = await fetch("/prompt-title", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: promptForApi, model: activeModel }),
+        });
+        if (seq !== outputTitleGenerationSeq) return;
+        let title = "";
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && typeof data.title === "string" && data.title.trim()) {
+            title = data.title.trim();
+          }
+        }
+        if (!title) {
+          title = fallbackTitleFromPrompt(promptForApi);
+        }
+        if (seq !== outputTitleGenerationSeq) return;
+        applyGeneratedTitle(title);
+      } catch {
+        if (seq !== outputTitleGenerationSeq) return;
+        applyGeneratedTitle(fallbackTitleFromPrompt(promptForApi));
+      }
+    })();
+  }
+
   function setOutputHasContent(hasContent) {
     const has = !!hasContent;
     if (refineBtn) refineBtn.disabled = !has;
     if (saveFavoriteBtn) saveFavoriteBtn.hidden = !has;
   }
-
-  let rolledRepoSubject = null;
-  let rolledRepoStyle = null;
 
   function setGenerating(isGenerating) {
     if (!generationStatusEl) return;
@@ -291,6 +458,82 @@
     input.value = "";
   }
 
+  function findTemplateListEl(category) {
+    return templateListEls.find(function (el) {
+      return (el.getAttribute("data-category") || "") === category;
+    }) || null;
+  }
+
+  function ensureSelectedTemplateIds(category) {
+    if (!selectedTemplatesByCategory.has(category)) {
+      selectedTemplatesByCategory.set(category, []);
+    }
+    return selectedTemplatesByCategory.get(category);
+  }
+
+  function removeSelectedTemplate(category, templateId) {
+    const current = ensureSelectedTemplateIds(category);
+    const next = current.filter(function (id) {
+      return id !== templateId;
+    });
+    selectedTemplatesByCategory.set(category, next);
+    renderSelectedTemplates(category);
+    syncSelectedTags();
+  }
+
+  function renderSelectedTemplates(category) {
+    const listEl = findTemplateListEl(category);
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    const ids = ensureSelectedTemplateIds(category);
+    const templateMap = getCategoryTemplateMap(category);
+    ids.forEach(function (templateId) {
+      const template = templateMap.get(templateId);
+      if (!template) return;
+      const chip = document.createElement("span");
+      chip.className = "template-chip";
+      chip.setAttribute("data-template-id", templateId);
+      chip.textContent = template.label;
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "template-chip__remove";
+      removeBtn.setAttribute("aria-label", "Remove template");
+      removeBtn.textContent = "\u00d7";
+      removeBtn.addEventListener("click", function () {
+        removeSelectedTemplate(category, templateId);
+      });
+      chip.appendChild(removeBtn);
+      listEl.appendChild(chip);
+    });
+  }
+
+  function collectCategoryTagsForTemplate(category) {
+    const tags = [];
+    const selectedDropdown = selectedDropdownTags.get(category);
+    if (selectedDropdown) tags.push(selectedDropdown);
+
+    const customTags = selectedCustomTagsByCategory.get(category) || [];
+    customTags.forEach(function (tag) {
+      if (!tags.includes(tag)) tags.push(tag);
+    });
+
+    const templateTags = selectedTemplateTagsByCategory.get(category) || [];
+    templateTags.forEach(function (tag) {
+      if (!tags.includes(tag)) tags.push(tag);
+    });
+    return tags;
+  }
+
+  function appendTemplateOption(selectEl, template) {
+    if (!selectEl || !template) return;
+    const opt = document.createElement("option");
+    opt.value = template.id;
+    opt.textContent = template.label + (template.is_predefined ? " (predefined)" : "");
+    opt.setAttribute("data-template-tags", (template.tags || []).join(" || "));
+    selectEl.appendChild(opt);
+  }
+
   document.querySelectorAll(".custom-tag-add").forEach(function (addBtn) {
     addBtn.addEventListener("click", function () {
       addCustomTagFromRow(addBtn);
@@ -306,6 +549,217 @@
       });
     }
   });
+
+  document.querySelectorAll(".template-add-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const category = (btn.getAttribute("data-category") || "").trim();
+      if (!category) return;
+      const selectEl = categoryTemplateSelectEls.find(function (el) {
+        return (el.getAttribute("data-category") || "") === category;
+      });
+      if (!selectEl || !selectEl.value) return;
+      const selectedIds = ensureSelectedTemplateIds(category);
+      if (!selectedIds.includes(selectEl.value)) {
+        selectedIds.push(selectEl.value);
+      }
+      selectedTemplatesByCategory.set(category, selectedIds);
+      renderSelectedTemplates(category);
+      syncSelectedTags();
+    });
+  });
+
+  function flushCustomTagInputForCategory(category) {
+    const cat = String(category || "").trim();
+    if (!cat) return;
+    const esc = cat.replace(/"/g, '\\"');
+    const input = document.querySelector(
+      '.custom-tag-row .custom-tag-input[data-category="' + esc + '"]'
+    );
+    if (!input || !input.value.trim()) return;
+    const row = input.closest(".custom-tag-row");
+    if (!row) return;
+    const addBtn = row.querySelector(".custom-tag-add");
+    if (addBtn) addCustomTagFromRow(addBtn);
+  }
+
+  async function persistCategoryTemplate(category, label) {
+    const trimmed = String(label || "").trim();
+    if (!trimmed || !category) {
+      return { ok: false, error: "Missing name or category." };
+    }
+
+    flushCustomTagInputForCategory(category);
+    syncSelectedTags();
+    const tags = collectCategoryTagsForTemplate(category);
+    if (!tags.length) {
+      return {
+        ok: false,
+        error: "Select or add at least one tag in this category first.",
+      };
+    }
+
+    try {
+      const resp = await fetch("/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: trimmed,
+          category: category,
+          tags: tags,
+        }),
+      });
+      if (!resp.ok) {
+        let detail = "";
+        try {
+          const errBody = await resp.json();
+          if (errBody && typeof errBody.error === "string") {
+            detail = ": " + errBody.error;
+          }
+        } catch {
+          /* noop */
+        }
+        return {
+          ok: false,
+          error: "Could not create template (HTTP " + resp.status + ")" + detail + ".",
+        };
+      }
+      const created = await resp.json();
+      registerTemplate(created);
+
+      const selectEl = categoryTemplateSelectEls.find(function (el) {
+        return (el.getAttribute("data-category") || "") === category;
+      });
+      if (selectEl) {
+        appendTemplateOption(selectEl, created);
+        selectEl.value = created.id;
+      }
+      const selectedIds = ensureSelectedTemplateIds(category);
+      if (!selectedIds.includes(created.id)) {
+        selectedIds.push(created.id);
+      }
+      selectedTemplatesByCategory.set(category, selectedIds);
+      renderSelectedTemplates(category);
+      syncSelectedTags();
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          "Could not reach the server: " +
+          (err && err.message ? err.message : String(err)),
+      };
+    }
+  }
+
+  (function TemplateCreateModal() {
+    const modal = document.getElementById("template-create-modal");
+    const nameInput = document.getElementById("template-create-name-input");
+    const nameError = document.getElementById("template-create-name-error");
+    const confirmBtn = document.getElementById("template-create-confirm-btn");
+    const cancelBtn = document.getElementById("template-create-cancel-btn");
+    if (!modal || !nameInput || !confirmBtn || !cancelBtn) return;
+
+    let pendingCategory = "";
+    let isSaving = false;
+    const defaultErrorText =
+      nameError && nameError.textContent ? nameError.textContent : "Please enter a name.";
+
+    function showError(message) {
+      if (!nameError) return;
+      nameError.textContent = message || defaultErrorText;
+      nameError.hidden = false;
+    }
+
+    function hideError() {
+      if (!nameError) return;
+      nameError.hidden = true;
+      nameError.textContent = defaultErrorText;
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      hideError();
+      pendingCategory = "";
+      isSaving = false;
+      confirmBtn.disabled = false;
+    }
+
+    function openModal(category) {
+      const cat = String(category || "").trim();
+      if (!cat) return;
+      pendingCategory = cat;
+      hideError();
+      nameInput.value = "";
+      isSaving = false;
+      confirmBtn.disabled = false;
+      modal.hidden = false;
+      setTimeout(function () {
+        nameInput.focus();
+      }, 0);
+    }
+
+    function confirmCreate() {
+      if (isSaving) return;
+      const label = (nameInput.value || "").trim();
+      if (!label) {
+        showError("Please enter a name.");
+        nameInput.focus();
+        return;
+      }
+      const category = pendingCategory;
+      if (!category) {
+        showError("No category selected. Reopen the dialog and try again.");
+        return;
+      }
+      hideError();
+      isSaving = true;
+      confirmBtn.disabled = true;
+      persistCategoryTemplate(category, label)
+        .then(function (result) {
+          if (result && result.ok) {
+            closeModal();
+            return;
+          }
+          showError((result && result.error) || "Could not create template.");
+        })
+        .finally(function () {
+          isSaving = false;
+          confirmBtn.disabled = false;
+        });
+    }
+
+    document.querySelectorAll(".template-create-open-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openModal((btn.getAttribute("data-category") || "").trim());
+      });
+    });
+
+    confirmBtn.addEventListener("click", confirmCreate);
+    cancelBtn.addEventListener("click", closeModal);
+    nameInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmCreate();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeModal();
+      }
+    });
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener(
+      "keydown",
+      function (e) {
+        if (e.key !== "Escape") return;
+        if (modal.hidden) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeModal();
+      },
+      true
+    );
+  })();
 
   document.addEventListener("click", function (e) {
     const removeEl = e.target.closest(".tag-remove");
@@ -343,9 +797,16 @@
 
   function randomizeSingleTagDropdown(selectEl, shouldSync) {
     if (!selectEl) return;
+    const category = selectEl.getAttribute("data-category") || "";
+    const hasTemplateSelections =
+      (selectedTemplatesByCategory.get(category) || []).length > 0;
+    const hasCustomTags =
+      (selectedCustomTagsByCategory.get(category) || []).length > 0;
+    if (hasTemplateSelections || hasCustomTags) {
+      return;
+    }
     const randomValue = pickRandomDropdownOption(selectEl);
     selectEl.value = randomValue;
-    const category = selectEl.getAttribute("data-category") || "";
     setDropdownSelection(category, randomValue);
     if (shouldSync !== false) {
       syncSelectedTags();
@@ -353,6 +814,7 @@
   }
 
   function randomizeTagDropdowns() {
+    syncSelectedTags();
     tagSelectEls.forEach(function (selectEl) {
       randomizeSingleTagDropdown(selectEl, false);
     });
@@ -603,15 +1065,66 @@
     }
   }
 
+  async function loadUserTemplates() {
+    try {
+      const resp = await fetch("/templates");
+      if (!resp.ok) return;
+      const items = await resp.json();
+      if (!Array.isArray(items)) return;
+      items.forEach(function (template) {
+        registerTemplate(template);
+      });
+      categoryTemplateSelectEls.forEach(function (selectEl) {
+        const category = (selectEl.getAttribute("data-category") || "").trim();
+        if (!category) return;
+        const currentIds = new Set(
+          Array.from(selectEl.options).map(function (opt) {
+            return String(opt.value || "").trim();
+          })
+        );
+        const templateMap = getCategoryTemplateMap(category);
+        templateMap.forEach(function (template, templateId) {
+          if (!currentIds.has(templateId)) {
+            appendTemplateOption(selectEl, template);
+          }
+        });
+      });
+    } catch {
+      /* noop */
+    }
+  }
+
   async function runGenerate(extra) {
     const freeText = freeTextEl ? freeTextEl.value : "";
-    const generatedFromRoll = {
-      repo_subject: rolledRepoSubject,
-      repo_style: rolledRepoStyle,
-    };
+    syncSelectedTags();
+    const selectedByCategory = {};
+    tagSelectEls.forEach(function (selectEl) {
+      const category = (selectEl.getAttribute("data-category") || "").trim();
+      if (!category) return;
+      const predefinedTags = [];
+      if (selectEl.value) {
+        predefinedTags.push(selectEl.value);
+      }
+      const customTags = (selectedCustomTagsByCategory.get(category) || []).slice();
+      const templateIds = (selectedTemplatesByCategory.get(category) || []).slice();
+      const templateTags = (selectedTemplateTagsByCategory.get(category) || []).slice();
+      const allTags = [];
+      predefinedTags.concat(customTags, templateTags).forEach(function (tag) {
+        const safe = String(tag || "").trim();
+        if (safe && !allTags.includes(safe)) allTags.push(safe);
+      });
+      selectedByCategory[category] = {
+        predefined_tags: predefinedTags,
+        custom_tags: customTags,
+        template_ids: templateIds,
+        template_tags: templateTags,
+        all_tags: allTags,
+      };
+    });
     const payload = Object.assign(
       {
         tags: Array.from(selectedTags),
+        selected_by_category: selectedByCategory,
         free_text: freeText,
         output_mode: currentMode,
         model:
@@ -619,7 +1132,6 @@
             ? modelSelect.value
             : DEFAULT_MODEL,
       },
-      generatedFromRoll,
       extra || {}
     );
 
@@ -652,7 +1164,29 @@
       });
 
       if (!response.ok) {
-        const errText = await response.text();
+        let errText = "";
+        try {
+          const errJson = await response.json();
+          if (
+            errJson &&
+            errJson.error === "missing_category_tags" &&
+            Array.isArray(errJson.missing_categories) &&
+            errJson.missing_categories.length
+          ) {
+            errText =
+              "Missing tags for categories: " +
+              errJson.missing_categories.join(", ") +
+              ".";
+          } else if (errJson && typeof errJson.message === "string") {
+            errText = errJson.message;
+          } else if (errJson && typeof errJson.error === "string") {
+            errText = errJson.error;
+          } else {
+            errText = JSON.stringify(errJson || {});
+          }
+        } catch {
+          errText = await response.text();
+        }
         if (outputPositive) {
           outputPositive.value =
             "[Request failed: " + response.status + "] " + (errText || "");
@@ -741,6 +1275,7 @@
           label + " ready (last run: " + totalSecs + " s)."
         );
       }
+      scheduleGeneratedTitleFromOutput(activeModel);
     }
   }
 
@@ -825,6 +1360,7 @@
       refineBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!outputPositive.value.trim());
+      scheduleGeneratedTitleFromOutput(activeModel);
     }
   }
 
@@ -852,235 +1388,15 @@
     }
   })();
 
-  (function RepoManager() {
-    const selectEl = document.getElementById("repo-select");
-    const newBtn = document.getElementById("repo-new-btn");
-    const editBtn = document.getElementById("repo-edit-btn");
-    const rollBtn = document.getElementById("roll-btn");
-    const rollClearBtn = document.getElementById("roll-clear-btn");
-    const rollResult = document.getElementById("roll-result");
-    const rollSubjectBadge = document.getElementById("roll-subject-badge");
-    const rollStyleBadge = document.getElementById("roll-style-badge");
-
-    const modal = document.getElementById("repo-modal");
-    const nameInput = document.getElementById("repo-name-input");
-    const subjectsInput = document.getElementById("repo-subjects-input");
-    const stylesInput = document.getElementById("repo-styles-input");
-    const saveBtn = document.getElementById("repo-save-btn");
-    const deleteBtn = document.getElementById("repo-delete-btn");
-    const cancelBtn = document.getElementById("repo-cancel-btn");
-
-    if (!selectEl || !newBtn || !editBtn || !rollBtn || !modal) return;
-
-    const STORAGE_KEY = "repoSelectedId";
-    let repos = [];
-    let selectedId = localStorage.getItem(STORAGE_KEY) || null;
-    let editingId = null;
-
-    function getSelectedRepo() {
-      if (!selectedId) return null;
-      return repos.find(function (r) {
-        return r && r.id === selectedId;
-      }) || null;
-    }
-
-    function persistSelection() {
-      if (selectedId) {
-        localStorage.setItem(STORAGE_KEY, selectedId);
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-
-    function refreshSelect() {
-      selectEl.innerHTML = "";
-      if (!repos.length) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "(no repos)";
-        opt.disabled = true;
-        opt.selected = true;
-        selectEl.appendChild(opt);
-        selectedId = null;
-        persistSelection();
-        return;
-      }
-
-      const hasSelected = repos.some(function (r) {
-        return r && r.id === selectedId;
-      });
-      if (!hasSelected) {
-        selectedId = repos[0].id;
-      }
-
-      repos.forEach(function (r) {
-        const opt = document.createElement("option");
-        opt.value = r.id;
-        opt.textContent = r.name || "(unnamed)";
-        if (r.id === selectedId) opt.selected = true;
-        selectEl.appendChild(opt);
-      });
-      persistSelection();
-    }
-
-    function openEditor(repo) {
-      if (!repo) return;
-      editingId = repo.id;
-      nameInput.value = repo.name || "";
-      subjectsInput.value = (repo.subjects || []).join(", ");
-      stylesInput.value = (repo.styles || []).join(", ");
-      modal.hidden = false;
-    }
-
-    function closeEditor() {
-      editingId = null;
-      modal.hidden = true;
-    }
-
-    function parseCsv(value) {
-      return String(value || "")
-        .split(",")
-        .map(function (s) {
-          return s.trim();
-        })
-        .filter(function (s) {
-          return s.length > 0;
-        });
-    }
-
-    function clearRolledSelection() {
-      rolledRepoSubject = null;
-      rolledRepoStyle = null;
-      if (rollResult) rollResult.hidden = true;
-      if (rollSubjectBadge) rollSubjectBadge.textContent = "";
-      if (rollStyleBadge) rollStyleBadge.textContent = "";
-    }
-
-    async function loadRepos() {
-      try {
-        const resp = await fetch("/repos");
-        if (!resp.ok) return;
-        const data = await resp.json();
-        repos = Array.isArray(data) ? data : [];
-      } catch {
-        repos = [];
-      }
-      refreshSelect();
-    }
-
-    selectEl.addEventListener("change", function () {
-      selectedId = selectEl.value || null;
-      persistSelection();
-      clearRolledSelection();
+  (async function initializeTemplates() {
+    await loadUserTemplates();
+    tagSelectEls.forEach(function (selectEl) {
+      const category = (selectEl.getAttribute("data-category") || "").trim();
+      if (!category) return;
+      selectedTemplatesByCategory.set(category, []);
+      renderSelectedTemplates(category);
     });
-
-    newBtn.addEventListener("click", async function () {
-      try {
-        const resp = await fetch("/repos", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: "New Repo" }),
-        });
-        if (!resp.ok) return;
-        const created = await resp.json();
-        repos.push(created);
-        selectedId = created.id;
-        refreshSelect();
-        openEditor(created);
-      } catch {
-        /* noop */
-      }
-    });
-
-    editBtn.addEventListener("click", function () {
-      const repo = getSelectedRepo();
-      if (!repo) return;
-      openEditor(repo);
-    });
-
-    saveBtn.addEventListener("click", async function () {
-      if (!editingId) return;
-      const payload = {
-        name: (nameInput.value || "").trim() || "New Repo",
-        subjects: parseCsv(subjectsInput.value),
-        styles: parseCsv(stylesInput.value),
-      };
-      try {
-        const resp = await fetch(
-          "/repos/" + encodeURIComponent(editingId),
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-        if (!resp.ok) return;
-        const updated = await resp.json();
-        const idx = repos.findIndex(function (r) {
-          return r && r.id === updated.id;
-        });
-        if (idx >= 0) {
-          repos[idx] = updated;
-        } else {
-          repos.push(updated);
-        }
-        refreshSelect();
-        closeEditor();
-      } catch {
-        /* noop */
-      }
-    });
-
-    deleteBtn.addEventListener("click", async function () {
-      if (!editingId) return;
-      try {
-        const resp = await fetch(
-          "/repos/" + encodeURIComponent(editingId),
-          { method: "DELETE" }
-        );
-        if (!resp.ok) return;
-        repos = repos.filter(function (r) {
-          return r && r.id !== editingId;
-        });
-        if (selectedId === editingId) {
-          selectedId = repos.length ? repos[0].id : null;
-        }
-        refreshSelect();
-        closeEditor();
-      } catch {
-        /* noop */
-      }
-    });
-
-    cancelBtn.addEventListener("click", function () {
-      closeEditor();
-    });
-
-    rollBtn.addEventListener("click", function () {
-      const repo = getSelectedRepo();
-      if (!repo) return;
-      const subjects = Array.isArray(repo.subjects) ? repo.subjects : [];
-      const styles = Array.isArray(repo.styles) ? repo.styles : [];
-      if (!subjects.length || !styles.length) {
-        clearRolledSelection();
-        return;
-      }
-      const subject = subjects[Math.floor(Math.random() * subjects.length)];
-      const style = styles[Math.floor(Math.random() * styles.length)];
-      rolledRepoSubject = subject;
-      rolledRepoStyle = style;
-      if (rollSubjectBadge) rollSubjectBadge.textContent = subject;
-      if (rollStyleBadge) rollStyleBadge.textContent = style;
-      if (rollResult) rollResult.hidden = false;
-    });
-
-    if (rollClearBtn) {
-      rollClearBtn.addEventListener("click", function () {
-        clearRolledSelection();
-      });
-    }
-
-    loadRepos();
+    syncSelectedTags();
   })();
 
   async function copyTextareaValue(textareaEl) {
@@ -1123,6 +1439,10 @@
       selectEl.value = "";
       const category = selectEl.getAttribute("data-category") || "";
       selectedDropdownTags.delete(category);
+    });
+    selectedTemplatesByCategory.forEach(function (_, category) {
+      selectedTemplatesByCategory.set(category, []);
+      renderSelectedTemplates(category);
     });
     syncSelectedTags();
   }
@@ -1227,6 +1547,7 @@
 
   (function FavoritesManager() {
     const STORAGE_KEY = "promptFavorites";
+    const MIGRATED_KEY = "promptFavoritesMigrated";
     const listEl = document.getElementById("favorites-list");
     const emptyEl = document.getElementById("favorites-empty");
     const modal = document.getElementById("favorite-save-modal");
@@ -1239,29 +1560,50 @@
 
     let favorites = [];
 
-    function load() {
+    function sanitizeFavorites(items) {
+      if (!Array.isArray(items)) return [];
+      return items.filter(function (f) {
+        return f && typeof f === "object" && typeof f.id === "string";
+      });
+    }
+
+    function loadLegacyLocalFavorites() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-          favorites = [];
-          return;
-        }
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
-        favorites = Array.isArray(parsed)
-          ? parsed.filter(function (f) {
-              return f && typeof f === "object" && typeof f.id === "string";
-            })
-          : [];
+        return sanitizeFavorites(parsed);
       } catch {
-        favorites = [];
+        return [];
       }
     }
 
-    function persist() {
+    function markLegacyMigrated() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites));
+        localStorage.setItem(MIGRATED_KEY, "1");
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+
+    function hasLegacyMigrationMarker() {
+      try {
+        return localStorage.getItem(MIGRATED_KEY) === "1";
       } catch {
-        /* quota exceeded - silent */
+        return false;
+      }
+    }
+
+    async function fetchFavorites() {
+      try {
+        const resp = await fetch("/saved-prompts");
+        if (!resp.ok) {
+          favorites = [];
+          return;
+        }
+        const data = await resp.json();
+        favorites = sanitizeFavorites(data);
+      } catch {
+        favorites = [];
       }
     }
 
@@ -1287,15 +1629,6 @@
       const raw = String(text || "").replace(/\s+/g, " ").trim();
       if (raw.length <= 160) return raw;
       return raw.slice(0, 160).trim() + "\u2026";
-    }
-
-    function makeId() {
-      return (
-        "fav_" +
-        Date.now().toString(36) +
-        "_" +
-        Math.random().toString(36).slice(2, 8)
-      );
     }
 
     function render() {
@@ -1389,11 +1722,18 @@
     }
 
     function deleteById(id) {
-      favorites = favorites.filter(function (f) {
-        return f.id !== id;
-      });
-      persist();
-      render();
+      (async function () {
+        try {
+          await fetch("/saved-prompts/" + encodeURIComponent(id), {
+            method: "DELETE",
+          });
+        } catch {
+          /* noop */
+        } finally {
+          await fetchFavorites();
+          render();
+        }
+      })();
     }
 
     function snapshotCurrent(name) {
@@ -1404,7 +1744,6 @@
           ? stripMjFlags(positiveRaw)
           : positiveRaw.trim();
       return {
-        id: makeId(),
         name: String(name || "").trim() || "Untitled favorite",
         mode: currentMode === "sdxl" ? "sdxl" : "mj",
         positive: cleanedPositive,
@@ -1444,6 +1783,9 @@
 
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
 
+      outputTitleGenerationSeq += 1;
+      applyGeneratedTitle("");
+
       const target = document.querySelector(".output-panel");
       if (target && typeof target.scrollIntoView === "function") {
         target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1468,13 +1810,24 @@
     function openModal() {
       if (!outputPositive || !outputPositive.value.trim()) return;
       if (nameError) nameError.hidden = true;
-      const suggestion = makePreview(
-        currentMode === "mj"
-          ? stripMjFlags(outputPositive.value)
-          : outputPositive.value
-      )
-        .slice(0, 48)
-        .trim();
+      let suggestion = "";
+      if (
+        outputGeneratedTitleEl &&
+        !outputGeneratedTitleEl.hidden &&
+        outputGeneratedTitleEl.textContent.trim() &&
+        outputGeneratedTitleEl.textContent.trim() !== "\u2026"
+      ) {
+        suggestion = outputGeneratedTitleEl.textContent.trim();
+      }
+      if (!suggestion) {
+        suggestion = makePreview(
+          currentMode === "mj"
+            ? stripMjFlags(outputPositive.value)
+            : outputPositive.value
+        )
+          .slice(0, 48)
+          .trim();
+      }
       nameInput.value = suggestion;
       modal.hidden = false;
       setTimeout(function () {
@@ -1489,6 +1842,7 @@
     }
 
     function confirmSave() {
+      (async function () {
       const name = (nameInput.value || "").trim();
       if (!name) {
         if (nameError) nameError.hidden = false;
@@ -1496,10 +1850,58 @@
         return;
       }
       const entry = snapshotCurrent(name);
-      favorites.push(entry);
-      persist();
+      try {
+        const resp = await fetch("/saved-prompts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+        });
+        if (!resp.ok) return;
+      } catch {
+        return;
+      }
+      await fetchFavorites();
       render();
       closeModal();
+      })();
+    }
+
+    async function migrateLegacyFavoritesIfNeeded() {
+      if (hasLegacyMigrationMarker()) return;
+      const legacy = loadLegacyLocalFavorites();
+      if (!legacy.length) {
+        markLegacyMigrated();
+        return;
+      }
+      if (favorites.length > 0) {
+        markLegacyMigrated();
+        return;
+      }
+      for (const item of legacy) {
+        try {
+          const payload = {
+            name: String(item.name || "").trim() || "Untitled favorite",
+            mode: item.mode === "sdxl" ? "sdxl" : "mj",
+            positive: String(item.positive || "").trim(),
+            negative: String(item.negative || "").trim(),
+            tags: Array.isArray(item.tags) ? item.tags : [],
+            freeText: typeof item.freeText === "string" ? item.freeText : "",
+            createdAt:
+              typeof item.createdAt === "number" && item.createdAt > 0
+                ? item.createdAt
+                : Date.now(),
+          };
+          if (!payload.positive) continue;
+          await fetch("/saved-prompts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          /* noop */
+        }
+      }
+      markLegacyMigrated();
     }
 
     if (saveFavoriteBtn) {
@@ -1520,12 +1922,17 @@
       if (e.target === modal) closeModal();
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !modal.hidden) {
-        closeModal();
-      }
+      if (e.key !== "Escape" || modal.hidden) return;
+      const tmplModal = document.getElementById("template-create-modal");
+      if (tmplModal && !tmplModal.hidden) return;
+      closeModal();
     });
 
-    load();
-    render();
+    (async function initializeFavorites() {
+      await fetchFavorites();
+      await migrateLegacyFavoritesIfNeeded();
+      await fetchFavorites();
+      render();
+    })();
   })();
 })();
