@@ -1,6 +1,6 @@
 # Muse - Image Prompt Builder
 
-A Flask web app for generating high-quality image prompts with either local Ollama models or Groq-hosted models. It supports Midjourney-style and SDXL/ComfyUI outputs, tag-based prompt composition, streaming generation, prompt refinement, and saved favorites.
+A Flask web app for generating high-quality image prompts with OpenRouter cloud models or local Ollama models. It supports Midjourney-style and SDXL/ComfyUI outputs, tag-based prompt composition, streaming generation, prompt refinement, and saved favorites.
 
 ## Features
 
@@ -10,8 +10,8 @@ A Flask web app for generating high-quality image prompts with either local Olla
   - **Midjourney** (single final prompt + MJ parameter controls)
   - **SDXL / ComfyUI** (`POSITIVE` and `NEGATIVE` prompt format + generation settings)
 - Model picker with both:
+  - OpenRouter cloud model (configured via `OPENROUTER_MODEL`)
   - Local Ollama models (auto-discovered from `/api/tags`)
-  - Predefined Groq models (enabled when `GROQ_API_KEY` is set)
 - Token streaming for both generate and refine flows
 - Favorites workflow in the UI
 
@@ -19,9 +19,10 @@ A Flask web app for generating high-quality image prompts with either local Olla
 
 - Python 3
 - Flask
+- Gunicorn (production)
 - Vanilla HTML/CSS/JavaScript
-- Ollama API (local)
-- Groq Chat Completions API (optional)
+- OpenRouter Chat Completions API
+- Ollama API (optional, local)
 
 ## Project Layout
 
@@ -36,6 +37,7 @@ A Flask web app for generating high-quality image prompts with either local Olla
 │       ├── style.css
 │       └── script.js
 ├── requirements.txt
+├── env.example
 ├── launch.bat
 └── .env
 ```
@@ -43,15 +45,15 @@ A Flask web app for generating high-quality image prompts with either local Olla
 ## Prerequisites
 
 - Python 3.10+ (3.11 recommended)
+- An [OpenRouter](https://openrouter.ai/) API key for cloud generation
 - (Optional) [Ollama](https://ollama.com/) running locally if you want local models
-- (Optional) Groq API key if you want Groq-backed generation
 
 ## Setup
 
 1. Clone or open this repo.
 2. Create and activate a virtual environment.
 3. Install dependencies from `requirements.txt`.
-4. Configure environment variables in `.env`.
+4. Copy `env.example` to `.env` and fill in your values.
 
 ### Windows quick start (recommended)
 
@@ -80,17 +82,32 @@ Then open:
 
 [http://localhost:5000](http://localhost:5000)
 
+### Production (Linux)
+
+Run from the repo with gunicorn:
+
+```bash
+/path/to/Muse/venv/bin/gunicorn \
+  -w 2 \
+  -b 127.0.0.1:5002 \
+  --chdir /path/to/Muse/prompt-builder \
+  --timeout 600 \
+  app:app
+```
+
+Place `.env` at the repo root. Use an absolute path for `STORAGE_DB_PATH` on the server if you override it.
+
 ## Environment Variables
 
 Defined in `.env` (repo root):
 
+- `OPENROUTER_API_KEY` — your OpenRouter API key (required for cloud generation)
+- `OPENROUTER_MODEL` (default: `google/gemma-3-12b-it`) — model ID sent to OpenRouter
 - `OLLAMA_URL` (default: `http://localhost:11434/api/generate`)
-- `OLLAMA_MODEL` (default model name, e.g. `hermes3:8b`)
-- `GROQ_API_KEY` (optional; enables Groq models)
-- `GROQ_BASE_URL` (default: `https://api.groq.com/openai/v1`)
+- `OLLAMA_MODEL` (default: `hermes3:8b`) — fallback default when no OpenRouter key is set
 - `STORAGE_DB_PATH` (optional; SQLite file path for saved prompts/templates, default: `prompt-builder/storage.db`)
 
-If `GROQ_API_KEY` is missing, Groq models appear disabled in the UI and Ollama-only usage still works.
+If `OPENROUTER_API_KEY` is missing, the OpenRouter model appears disabled in the UI and Ollama-only usage still works.
 
 ## Running with Ollama
 
@@ -108,7 +125,7 @@ If `GROQ_API_KEY` is missing, Groq models appear disabled in the UI and Ollama-o
 - `GET /saved-prompts` - list saved prompts
 - `POST /saved-prompts` - save prompt favorite
 - `DELETE /saved-prompts/<prompt_id>` - delete saved prompt
-- `GET /models` - available Ollama + Groq model metadata
+- `GET /models` - available Ollama + OpenRouter model metadata
 - `POST /warmup` - warm model and return load timing
 - `POST /generate` - stream generated prompt text
 - `POST /refine` - stream refined prompt text
@@ -119,5 +136,3 @@ If `GROQ_API_KEY` is missing, Groq models appear disabled in the UI and Ollama-o
 - Saved prompts and user templates are persisted in SQLite (`prompt-builder/storage.db` by default).
 - Existing `templates.json` entries are auto-imported on first run if the database table is empty.
 - Legacy browser `localStorage` favorites are migrated once on first load of the updated UI.
-- There is also a simple root-level `app.py` quote demo in this repo; the primary app is `prompt-builder/app.py`.
-

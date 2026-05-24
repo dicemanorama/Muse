@@ -214,10 +214,22 @@
   }
 
   const MJ_FLAG_RE = /\s*--(?:ar|v|q|s|c|w|style|stylize|chaos|weird|niji|iw|seed)\s+\S+/gi;
+  const MJ_WEIGHT_RE = /::-?\d+(?:\.\d+)?/g;
 
   function stripMjFlags(text) {
     if (!text) return "";
     return String(text).replace(MJ_FLAG_RE, "").trim();
+  }
+
+  function stripMjWeights(text) {
+    if (!text) return "";
+    return String(text)
+      .replace(MJ_WEIGHT_RE, "")
+      .replace(/::/g, ", ")
+      .replace(/\s*,\s*,+/g, ", ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+,/g, ",")
+      .trim();
   }
 
   function isBrokenPromptOutput(text) {
@@ -333,9 +345,9 @@
     return bits.length ? displayName + " (" + bits.join(", ") + ")" : displayName;
   }
 
-  function isGroqModel(modelName) {
+  function isOpenRouterModel(modelName) {
     const meta = modelMeta.get(modelName);
-    return !!(meta && meta.provider === "groq");
+    return !!(meta && meta.provider === "openrouter");
   }
 
   async function warmupModel(modelName) {
@@ -352,14 +364,14 @@
 
     const label = formatModelLabel(modelName);
     const started = Date.now();
-    const isGroq = isGroqModel(modelName);
+    const isOpenRouter = isOpenRouterModel(modelName);
     setModelStatus(
       "warming",
-      isGroq
+      isOpenRouter
         ? "Checking " + label + "..."
         : "Warming up " + label + "... (first load can take 30-60 s)"
     );
-    const tick = isGroq
+    const tick = isOpenRouter
       ? null
       : setInterval(function () {
           if (currentWarmupSeq !== mySeq) return;
@@ -844,7 +856,7 @@
   }
 
   function appendMjParamFlags(streamedText) {
-    const base = streamedText.trim();
+    const base = stripMjWeights(streamedText);
     const parts = [];
     parts.push("--ar " + getAspectRatioValue());
     if (mjVersion && mjVersion.value) parts.push(mjVersion.value.trim());
@@ -983,12 +995,12 @@
       return opt;
     }
 
-    const grouped = { ollama: [], groq: [], other: [] };
+    const grouped = { ollama: [], openrouter: [], other: [] };
     optionValues.forEach(function (model) {
       const meta = modelMeta.get(model);
       const provider = (meta && meta.provider) || "other";
       if (provider === "ollama") grouped.ollama.push(model);
-      else if (provider === "groq") grouped.groq.push(model);
+      else if (provider === "openrouter") grouped.openrouter.push(model);
       else grouped.other.push(model);
     });
 
@@ -1002,9 +1014,9 @@
       modelSelect.appendChild(og);
     }
 
-    if (grouped.ollama.length > 0 || grouped.groq.length > 0) {
+    if (grouped.ollama.length > 0 || grouped.openrouter.length > 0) {
       appendGroup("Ollama (local)", grouped.ollama);
-      appendGroup("Groq (cloud)", grouped.groq);
+      appendGroup("OpenRouter (cloud)", grouped.openrouter);
       grouped.other.forEach(function (model) {
         modelSelect.appendChild(makeOption(model));
       });
@@ -1147,7 +1159,7 @@
       const secs = Math.floor((Date.now() - startedAt) / 1000);
       if (firstTokenAt === null) {
         const loadingMsg =
-          warmModels.has(activeModel) || isGroqModel(activeModel)
+          warmModels.has(activeModel) || isOpenRouterModel(activeModel)
             ? "Thinking... " + secs + " s"
             : "Loading " + activeModel + " into memory... " + secs + " s";
         setGenerationStatusText(loadingMsg);
@@ -1285,7 +1297,9 @@
     if (!currentText.trim()) return;
 
     const basePrompt =
-      currentMode === "mj" ? stripMjFlags(currentText) : currentText.trim();
+      currentMode === "mj"
+        ? stripMjWeights(stripMjFlags(currentText))
+        : currentText.trim();
     if (!basePrompt) return;
 
     const activeModel =
@@ -1741,7 +1755,7 @@
       const negativeRaw = outputNegative ? outputNegative.value : "";
       const cleanedPositive =
         currentMode === "mj"
-          ? stripMjFlags(positiveRaw)
+          ? stripMjWeights(stripMjFlags(positiveRaw))
           : positiveRaw.trim();
       return {
         name: String(name || "").trim() || "Untitled favorite",

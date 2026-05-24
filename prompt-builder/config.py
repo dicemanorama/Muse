@@ -20,55 +20,25 @@ except ImportError:
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "llama-3.1-8b-instant")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "hermes3:8b").strip()
 STORAGE_DB_PATH = os.environ.get(
     "STORAGE_DB_PATH",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage.db"),
 )
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_BASE_URL = os.environ.get(
-    "GROQ_BASE_URL", "https://api.groq.com/openai/v1"
-).strip().rstrip("/")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = os.environ.get(
+    "OPENROUTER_MODEL", "google/gemma-3-12b-it"
+).strip()
 
-if not GROQ_API_KEY:
+MODEL_NAME = OPENROUTER_MODEL if OPENROUTER_API_KEY else OLLAMA_MODEL
+
+if not OPENROUTER_API_KEY:
     print(
-        "[config] GROQ_API_KEY is empty; Groq models will appear as unavailable in the UI.",
+        "[config] OPENROUTER_API_KEY is empty; OpenRouter model will appear as unavailable in the UI.",
         file=sys.stderr,
     )
-
-GROQ_MODELS = [
-    {
-        "id": "llama-3.3-70b-versatile",
-        "label": "Llama 3.3 70B (versatile)",
-        "parameter_size": "70B",
-    },
-    {
-        "id": "llama-3.1-8b-instant",
-        "label": "Llama 3.1 8B (instant)",
-        "parameter_size": "8B",
-    },
-    {
-        "id": "meta-llama/llama-4-scout-17b-16e-instruct",
-        "label": "Llama 4 Scout 17B",
-        "parameter_size": "17B",
-    },
-    {
-        "id": "meta-llama/llama-4-maverick-17b-128e-instruct",
-        "label": "Llama 4 Maverick 17B",
-        "parameter_size": "17B",
-    },
-    {
-        "id": "moonshotai/kimi-k2-instruct",
-        "label": "Kimi K2 (Moonshot)",
-        "parameter_size": "1T",
-    },
-    {
-        "id": "gemma2-9b-it",
-        "label": "Gemma 2 9B",
-        "parameter_size": "9B",
-    },
-]
 
 
 MJ_SYSTEM_PROMPT = (
@@ -83,6 +53,8 @@ MJ_SYSTEM_PROMPT = (
     "  keyword dumps like 'cat, forest, moon, night'.\n"
     "- NEVER include Midjourney parameter flags (--ar, --v, --s, --c, --w, --q, --style, --niji, "
     "  --chaos, --stylize, --weird). Those are appended by the UI.\n"
+    "- NEVER use Midjourney weight syntax ('::', '::2', '::-1', etc.). Express emphasis with vivid "
+    "  wording instead.\n"
     "- NEVER include preambles, labels, explanations, quotes, markdown, or trailing commentary.\n"
     "- NEVER mention that you are an AI or describe what you are doing.\n\n"
 
@@ -102,8 +74,6 @@ MJ_SYSTEM_PROMPT = (
     "     8k, award-winning, volumetric atmosphere'. Do not over-stack generic boosters.\n\n"
 
     "MIDJOURNEY SYNTAX AWARENESS:\n"
-    "- You may use double-colon weighted emphasis sparingly to anchor the most important element "
-    "  (e.g. 'ancient dragon::2, mist-veiled canyon'). Use at most one weighted phrase per prompt.\n"
     "- Group multi-word concepts so they read as a unit.\n"
     "- Prefer concrete nouns and active, sensory adjectives over vague words like 'beautiful', "
     "  'amazing', 'nice'.\n\n"
@@ -349,6 +319,36 @@ TAGS = {
         "ethereal phoenix",
         "celestial observatory",
         "shogun's war camp",
+        "frost giant chieftain",
+        "elven ranger archer",
+        "kraken surfacing",
+        "desert oracle seer",
+        "sand pirate queen",
+        "clocktower bell ringer",
+        "holographic street busker",
+        "moss golem warden",
+        "volcanic forge master",
+        "ice witch sovereign",
+        "silk road merchant",
+        "opera diva",
+        "submarine captain",
+        "pollen fairy swarm",
+        "raven witch familiar",
+        "katana swordsmith",
+        "lunar eclipse priestess",
+        "coral mermaid court",
+        "scrap metal sculptor",
+        "hologram news anchor",
+        "pine spirit guide",
+        "avalanche rescue crew",
+        "carnival strongman",
+        "rooftop beekeeper",
+        "canyon rope acrobat",
+        "bone golem necromancer",
+        "solar eclipse cultist",
+        "windmill miller",
+        "cherry blossom geisha",
+        "quantum garden botanist",
     ],
     "Location": [
         "forest clearing",
@@ -451,6 +451,36 @@ TAGS = {
         "cliff-face monastery stairs",
         "bamboo maze garden",
         "starlit desert plateau",
+        "abandoned airship hangar",
+        "bioluminescent cave grotto",
+        "coastal tide pool terraces",
+        "derelict orbital ring segment",
+        "enchanted mushroom grove",
+        "fog-shrouded cemetery hill",
+        "geothermal hot spring valley",
+        "hanging cliffside village",
+        "iceberg arch passage",
+        "jasmine terrace courtyard",
+        "kaleidoscope glass conservatory",
+        "limestone karst peaks",
+        "midnight carnival midway",
+        "neon rain-slick backstreet",
+        "overgrown victorian greenhouse",
+        "pearl lagoon sandbar",
+        "quartz crystal canyon",
+        "rooftop koi pond terrace",
+        "sandstone slot canyon",
+        "thunderhead mountain summit",
+        "underwater geyser vents",
+        "gilded opera house foyer",
+        "misty birch ridgeline",
+        "meteorite impact garden",
+        "spice market souk alley",
+        "ancient ziggurat summit",
+        "amber-lit river bend",
+        "copper mine elevator shaft",
+        "dragonbone bridge gorge",
+        "palm oasis canyon floor",
     ],
     "Action": [
         "standing still",

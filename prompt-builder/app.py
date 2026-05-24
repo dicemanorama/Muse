@@ -14,12 +14,12 @@ from flask import Flask, Response, jsonify, render_template, request, stream_wit
 
 from config import (
     CATEGORY_TEMPLATES,
-    GROQ_API_KEY,
-    GROQ_BASE_URL,
-    GROQ_MODELS,
     MJ_SYSTEM_PROMPT,
     MODEL_NAME,
     OLLAMA_URL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_MODEL,
     REFINE_SYSTEM_PROMPT,
     SDXL_SYSTEM_PROMPT,
     STORAGE_DB_PATH,
@@ -36,22 +36,21 @@ from db import (
     list_user_templates,
 )
 
-GROQ_MODEL_IDS = {m["id"] for m in GROQ_MODELS}
+def _is_openrouter_model(name: str) -> bool:
+    return isinstance(name, str) and name == OPENROUTER_MODEL
 
 
-def _is_groq_model(name: str) -> bool:
-    return isinstance(name, str) and name in GROQ_MODEL_IDS
-
-
-def _groq_chat_stream(model: str, system: str, user: str):
-    if not GROQ_API_KEY:
-        yield "[Groq error: GROQ_API_KEY not set in .env]"
+def _openrouter_chat_stream(model: str, system: str, user: str):
+    if not OPENROUTER_API_KEY:
+        yield "[OpenRouter error: OPENROUTER_API_KEY not set in .env]"
         return
 
-    url = f"{GROQ_BASE_URL}/chat/completions"
+    url = f"{OPENROUTER_BASE_URL}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/muse-prompt-builder",
+        "X-Title": "Muse",
     }
     payload = {
         "model": model,
@@ -67,7 +66,7 @@ def _groq_chat_stream(model: str, system: str, user: str):
         ) as resp:
             if resp.status_code != 200:
                 body = resp.text
-                yield f"\n[Groq error {resp.status_code}: {body}]"
+                yield f"\n[OpenRouter error {resp.status_code}: {body}]"
                 return
             for raw_line in resp.iter_lines(decode_unicode=True):
                 if not raw_line:
@@ -90,7 +89,7 @@ def _groq_chat_stream(model: str, system: str, user: str):
                 if chunk:
                     yield chunk
     except requests.exceptions.RequestException as e:
-        yield f"\n[Groq error: {e}]"
+        yield f"\n[OpenRouter error: {e}]"
 
 def _ollama_chat_stream(model: str, system: str, user: str):
     """Stream completion tokens from Ollama's /api/generate as plain strings."""
@@ -131,9 +130,9 @@ def _ollama_chat_stream(model: str, system: str, user: str):
 
 
 def _llm_stream(model: str, system: str, user: str):
-    """Dispatch to Groq or Ollama based on the selected model."""
-    if _is_groq_model(model):
-        yield from _groq_chat_stream(model, system, user)
+    """Dispatch to OpenRouter or Ollama based on the selected model."""
+    if _is_openrouter_model(model):
+        yield from _openrouter_chat_stream(model, system, user)
         return
     yield from _ollama_chat_stream(model, system, user)
 
@@ -219,22 +218,19 @@ def _normalize_models(payload: dict) -> list[dict]:
     return out
 
 
-def _groq_model_entries() -> list[dict]:
-    disabled = not GROQ_API_KEY
-    entries: list[dict] = []
-    for m in GROQ_MODELS:
-        entries.append(
-            {
-                "name": m["id"],
-                "label": m["label"],
-                "size_gb": None,
-                "family": "groq",
-                "parameter_size": m.get("parameter_size"),
-                "provider": "groq",
-                "disabled": disabled,
-            }
-        )
-    return entries
+def _openrouter_model_entries() -> list[dict]:
+    disabled = not OPENROUTER_API_KEY
+    return [
+        {
+            "name": OPENROUTER_MODEL,
+            "label": OPENROUTER_MODEL,
+            "size_gb": None,
+            "family": "openrouter",
+            "parameter_size": None,
+            "provider": "openrouter",
+            "disabled": disabled,
+        }
+    ]
 
 
 def _load_user_templates() -> list[dict]:
@@ -569,10 +565,10 @@ def prompt_title():
 
 @app.route("/models", methods=["GET"])
 def list_models():
-    groq_entries = _groq_model_entries()
-    groq_error = None
-    if not GROQ_API_KEY:
-        groq_error = "GROQ_API_KEY not set in .env - Groq models disabled."
+    openrouter_entries = _openrouter_model_entries()
+    openrouter_error = None
+    if not OPENROUTER_API_KEY:
+        openrouter_error = "OPENROUTER_API_KEY not set in .env - OpenRouter model disabled."
 
     req = urllib.request.Request(
         _ollama_tags_url(),
@@ -587,7 +583,7 @@ def list_models():
         return (
             jsonify(
                 {
-                    "models": groq_entries,
+                    "models": openrouter_entries,
                     "default_model": MODEL_NAME,
                     "error": f"Ollama returned HTTP {e.code} from {_ollama_tags_url()}",
                 }
@@ -598,7 +594,7 @@ def list_models():
         return (
             jsonify(
                 {
-                    "models": groq_entries,
+                    "models": openrouter_entries,
                     "default_model": MODEL_NAME,
                     "error": f"Could not reach Ollama at {_ollama_tags_url()}: {e.reason}",
                 }
@@ -609,7 +605,7 @@ def list_models():
         return (
             jsonify(
                 {
-                    "models": groq_entries,
+                    "models": openrouter_entries,
                     "default_model": MODEL_NAME,
                     "error": f"Failed to read models from Ollama: {e}",
                 }
@@ -618,11 +614,11 @@ def list_models():
         )
 
     payload = {
-        "models": _normalize_models(data) + groq_entries,
+        "models": _normalize_models(data) + openrouter_entries,
         "default_model": MODEL_NAME,
     }
-    if groq_error:
-        payload["error"] = groq_error
+    if openrouter_error:
+        payload["error"] = openrouter_error
     return jsonify(payload)
 
 
@@ -632,13 +628,13 @@ def warmup():
     model_raw = data.get("model", "")
     model_name = (model_raw.strip() if isinstance(model_raw, str) else "") or MODEL_NAME
 
-    if _is_groq_model(model_name):
-        if not GROQ_API_KEY:
+    if _is_openrouter_model(model_name):
+        if not OPENROUTER_API_KEY:
             return jsonify(
                 {
                     "ok": False,
                     "model": model_name,
-                    "error": "GROQ_API_KEY not set in .env",
+                    "error": "OPENROUTER_API_KEY not set in .env",
                 }
             )
         return jsonify({"ok": True, "model": model_name, "load_seconds": 0})
