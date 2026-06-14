@@ -16,7 +16,7 @@ jobs:
           username: aaron
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/tickerpicker/tickerpicker
+            cd /var/www/muse
             git pull
             source venv/bin/activate
             pip install -r requirements.txt
