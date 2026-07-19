@@ -536,11 +536,21 @@ body {
 }
 
 .template-add-btn.btn,
-.template-create-open-btn.btn {
+.template-create-open-btn.btn,
+.template-edit-open-btn.btn {
   padding: 0.28rem 0.55rem;
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.template-edit-open-btn.btn:disabled {
+  display: none;
+}
+
+.template-tags-input {
+  min-height: 7rem;
+  resize: vertical;
 }
 
 .custom-tag-list {

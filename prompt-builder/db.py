@@ -154,6 +154,30 @@ def create_user_template(
     }
 
 
+def update_user_template(
+    db_path: str, template_id: str, label: str, category: str, tags: list[str]
+) -> dict | None:
+    with _connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            UPDATE user_templates
+            SET label = ?, category = ?, tags_json = ?
+            WHERE id = ?
+            """,
+            (label, category, json.dumps(tags), template_id),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            return None
+    return {
+        "id": template_id,
+        "label": label,
+        "category": category,
+        "tags": tags,
+        "is_predefined": False,
+    }
+
+
 def delete_user_template(db_path: str, template_id: str) -> None:
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM user_templates WHERE id = ?", (template_id,))

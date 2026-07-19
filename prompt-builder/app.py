@@ -34,6 +34,7 @@ from db import (
     init_db,
     list_saved_prompts,
     list_user_templates,
+    update_user_template,
 )
 
 def _is_openrouter_model(name: str) -> bool:
@@ -361,6 +362,27 @@ def create_template():
 def delete_template(template_id: str):
     delete_user_template(STORAGE_DB_PATH, template_id)
     return jsonify({"ok": True})
+
+
+@app.route("/templates/<template_id>", methods=["PUT"])
+def update_template(template_id: str):
+    data = request.get_json(silent=True) or {}
+    label_raw = data.get("label")
+    category = data.get("category")
+    if not isinstance(label_raw, str) or not label_raw.strip():
+        return jsonify({"error": "label is required"}), 400
+    if category not in TAGS:
+        return jsonify({"error": "invalid category"}), 400
+    updated = update_user_template(
+        STORAGE_DB_PATH,
+        template_id=template_id,
+        label=label_raw.strip(),
+        category=category,
+        tags=_clean_string_list(data.get("tags")),
+    )
+    if updated is None:
+        return jsonify({"error": "template not found"}), 404
+    return jsonify(updated)
 
 
 @app.route("/saved-prompts", methods=["GET"])

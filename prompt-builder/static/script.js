@@ -51,6 +51,9 @@
   const categoryTemplateSelectEls = Array.from(
     document.querySelectorAll(".category-template-select")
   );
+  const templateEditOpenBtns = Array.from(
+    document.querySelectorAll(".template-edit-open-btn")
+  );
   const templateListEls = Array.from(document.querySelectorAll(".template-list"));
   const tagCategoryRandomizeBtns = Array.from(
     document.querySelectorAll(".tag-category-randomize-btn")
@@ -543,7 +546,59 @@
     opt.value = template.id;
     opt.textContent = template.label + (template.is_predefined ? " (predefined)" : "");
     opt.setAttribute("data-template-tags", (template.tags || []).join(" || "));
+    opt.setAttribute("data-is-predefined", template.is_predefined ? "true" : "false");
     selectEl.appendChild(opt);
+  }
+
+  function updateTemplateOption(selectEl, template) {
+    if (!selectEl || !template) return;
+    const opt = Array.from(selectEl.options).find(function (option) {
+      return option.value === template.id;
+    });
+    if (!opt) {
+      appendTemplateOption(selectEl, template);
+      return;
+    }
+    opt.textContent = template.label + (template.is_predefined ? " (predefined)" : "");
+    opt.setAttribute("data-template-tags", (template.tags || []).join(" || "));
+    opt.setAttribute("data-is-predefined", template.is_predefined ? "true" : "false");
+  }
+
+  function findTemplateSelectForCategory(category) {
+    return categoryTemplateSelectEls.find(function (el) {
+      return (el.getAttribute("data-category") || "") === category;
+    }) || null;
+  }
+
+  function findTemplateEditButtonForCategory(category) {
+    return templateEditOpenBtns.find(function (btn) {
+      return (btn.getAttribute("data-category") || "") === category;
+    }) || null;
+  }
+
+  function syncTemplateEditButton(category) {
+    const selectEl = findTemplateSelectForCategory(category);
+    const editBtn = findTemplateEditButtonForCategory(category);
+    if (!selectEl || !editBtn) return;
+    const template = getCategoryTemplateMap(category).get(selectEl.value);
+    const canEdit = !!(template && template.is_predefined !== true);
+    editBtn.disabled = !canEdit;
+    editBtn.title = canEdit ? "" : "Only saved templates can be edited.";
+  }
+
+  function parseTemplateTagsInput(value) {
+    const seen = new Set();
+    const tags = [];
+    String(value || "")
+      .split(/\r?\n|,/)
+      .forEach(function (raw) {
+        const tag = String(raw || "").trim();
+        const key = tag.toLowerCase();
+        if (!tag || seen.has(key)) return;
+        seen.add(key);
+        tags.push(tag);
+      });
+    return tags;
   }
 
   document.querySelectorAll(".custom-tag-add").forEach(function (addBtn) {
@@ -594,15 +649,21 @@
     if (addBtn) addCustomTagFromRow(addBtn);
   }
 
-  async function persistCategoryTemplate(category, label) {
+  categoryTemplateSelectEls.forEach(function (selectEl) {
+    const category = (selectEl.getAttribute("data-category") || "").trim();
+    syncTemplateEditButton(category);
+    selectEl.addEventListener("change", function () {
+      syncTemplateEditButton(category);
+    });
+  });
+
+  async function persistCategoryTemplate(category, label, explicitTags) {
     const trimmed = String(label || "").trim();
     if (!trimmed || !category) {
       return { ok: false, error: "Missing name or category." };
     }
 
-    flushCustomTagInputForCategory(category);
-    syncSelectedTags();
-    const tags = collectCategoryTagsForTemplate(category);
+    const tags = Array.isArray(explicitTags) ? explicitTags : collectCategoryTagsForTemplate(category);
     if (!tags.length) {
       return {
         ok: false,
@@ -645,6 +706,7 @@
         appendTemplateOption(selectEl, created);
         selectEl.value = created.id;
       }
+      syncTemplateEditButton(category);
       const selectedIds = ensureSelectedTemplateIds(category);
       if (!selectedIds.includes(created.id)) {
         selectedIds.push(created.id);
@@ -663,15 +725,73 @@
     }
   }
 
+  async function updateCategoryTemplate(templateId, category, label, tags) {
+    const trimmed = String(label || "").trim();
+    if (!templateId || !trimmed || !category) {
+      return { ok: false, error: "Missing template, name, or category." };
+    }
+    if (!Array.isArray(tags) || !tags.length) {
+      return { ok: false, error: "Add at least one tag to this template." };
+    }
+
+    try {
+      const resp = await fetch("/templates/" + encodeURIComponent(templateId), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: trimmed,
+          category: category,
+          tags: tags,
+        }),
+      });
+      if (!resp.ok) {
+        let detail = "";
+        try {
+          const errBody = await resp.json();
+          if (errBody && typeof errBody.error === "string") {
+            detail = ": " + errBody.error;
+          }
+        } catch {
+          /* noop */
+        }
+        return {
+          ok: false,
+          error: "Could not update template (HTTP " + resp.status + ")" + detail + ".",
+        };
+      }
+      const updated = await resp.json();
+      registerTemplate(updated);
+      const selectEl = findTemplateSelectForCategory(category);
+      if (selectEl) {
+        updateTemplateOption(selectEl, updated);
+        selectEl.value = updated.id;
+      }
+      renderSelectedTemplates(category);
+      syncTemplateEditButton(category);
+      syncSelectedTags();
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          "Could not reach the server: " +
+          (err && err.message ? err.message : String(err)),
+      };
+    }
+  }
+
   (function TemplateCreateModal() {
     const modal = document.getElementById("template-create-modal");
+    const titleEl = document.getElementById("template-create-modal-title");
     const nameInput = document.getElementById("template-create-name-input");
+    const tagsInput = document.getElementById("template-create-tags-input");
     const nameError = document.getElementById("template-create-name-error");
     const confirmBtn = document.getElementById("template-create-confirm-btn");
     const cancelBtn = document.getElementById("template-create-cancel-btn");
-    if (!modal || !nameInput || !confirmBtn || !cancelBtn) return;
+    if (!modal || !nameInput || !tagsInput || !confirmBtn || !cancelBtn) return;
 
     let pendingCategory = "";
+    let pendingTemplateId = "";
     let isSaving = false;
     const defaultErrorText =
       nameError && nameError.textContent ? nameError.textContent : "Please enter a name.";
@@ -692,16 +812,28 @@
       modal.hidden = true;
       hideError();
       pendingCategory = "";
+      pendingTemplateId = "";
       isSaving = false;
       confirmBtn.disabled = false;
     }
 
-    function openModal(category) {
+    function setModalMode(mode) {
+      const isEdit = mode === "edit";
+      if (titleEl) titleEl.textContent = isEdit ? "Edit template" : "Create template";
+      confirmBtn.textContent = isEdit ? "Save" : "Create";
+    }
+
+    function openCreateModal(category) {
       const cat = String(category || "").trim();
       if (!cat) return;
+      flushCustomTagInputForCategory(cat);
+      syncSelectedTags();
       pendingCategory = cat;
+      pendingTemplateId = "";
+      setModalMode("create");
       hideError();
       nameInput.value = "";
+      tagsInput.value = collectCategoryTagsForTemplate(cat).join("\n");
       isSaving = false;
       confirmBtn.disabled = false;
       modal.hidden = false;
@@ -710,7 +842,27 @@
       }, 0);
     }
 
-    function confirmCreate() {
+    function openEditModal(category, templateId) {
+      const cat = String(category || "").trim();
+      const id = String(templateId || "").trim();
+      const template = getCategoryTemplateMap(cat).get(id);
+      if (!cat || !template || template.is_predefined === true) return;
+      pendingCategory = cat;
+      pendingTemplateId = id;
+      setModalMode("edit");
+      hideError();
+      nameInput.value = template.label || "";
+      tagsInput.value = (template.tags || []).join("\n");
+      isSaving = false;
+      confirmBtn.disabled = false;
+      modal.hidden = false;
+      setTimeout(function () {
+        nameInput.focus();
+        nameInput.select();
+      }, 0);
+    }
+
+    function confirmSave() {
       if (isSaving) return;
       const label = (nameInput.value || "").trim();
       if (!label) {
@@ -723,10 +875,19 @@
         showError("No category selected. Reopen the dialog and try again.");
         return;
       }
+      const tags = parseTemplateTagsInput(tagsInput.value);
+      if (!tags.length) {
+        showError("Add at least one tag.");
+        tagsInput.focus();
+        return;
+      }
       hideError();
       isSaving = true;
       confirmBtn.disabled = true;
-      persistCategoryTemplate(category, label)
+      const savePromise = pendingTemplateId
+        ? updateCategoryTemplate(pendingTemplateId, category, label, tags)
+        : persistCategoryTemplate(category, label, tags);
+      savePromise
         .then(function (result) {
           if (result && result.ok) {
             closeModal();
@@ -742,17 +903,32 @@
 
     document.querySelectorAll(".template-create-open-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        openModal((btn.getAttribute("data-category") || "").trim());
+        openCreateModal((btn.getAttribute("data-category") || "").trim());
       });
     });
 
-    confirmBtn.addEventListener("click", confirmCreate);
+    templateEditOpenBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const category = (btn.getAttribute("data-category") || "").trim();
+        const selectEl = findTemplateSelectForCategory(category);
+        if (!selectEl || !selectEl.value) return;
+        openEditModal(category, selectEl.value);
+      });
+    });
+
+    confirmBtn.addEventListener("click", confirmSave);
     cancelBtn.addEventListener("click", closeModal);
     nameInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        confirmCreate();
+        confirmSave();
       } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeModal();
+      }
+    });
+    tagsInput.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
         e.preventDefault();
         closeModal();
       }

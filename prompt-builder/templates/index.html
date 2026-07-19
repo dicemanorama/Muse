@@ -215,11 +215,21 @@
                 <option
                   value="{{ template.id | e }}"
                   data-template-tags="{{ template.tags | join(' || ') | e }}"
+                  data-is-predefined="{{ 'true' if template.is_predefined else 'false' }}"
                 >
                   {{ template.label }}{% if template.is_predefined %} (predefined){% endif %}
                 </option>
                 {% endfor %}
               </select>
+              <button
+                type="button"
+                class="btn template-edit-open-btn"
+                data-category="{{ category | e }}"
+                aria-label="Edit selected {{ category }} template"
+                disabled
+              >
+                Edit Template
+              </button>
               <button
                 type="button"
                 class="btn template-add-btn"
@@ -442,6 +452,14 @@
           maxlength="120"
           placeholder="e.g. Evening portrait set"
         />
+        <label class="field-label" for="template-create-tags-input">Tags</label>
+        <textarea
+          id="template-create-tags-input"
+          class="template-tags-input"
+          rows="5"
+          placeholder="One tag per line"
+          autocomplete="off"
+        ></textarea>
         <p class="field-help" id="template-create-name-error" hidden role="alert">
           Please enter a name.
         </p>
