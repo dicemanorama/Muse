@@ -256,6 +256,18 @@
     return raw.slice(0, max).trim() + "\u2026";
   }
 
+  function getCurrentGeneratedTitle() {
+    if (
+      !outputGeneratedTitleEl ||
+      outputGeneratedTitleEl.hidden ||
+      !outputGeneratedTitleEl.textContent
+    ) {
+      return "";
+    }
+    const title = outputGeneratedTitleEl.textContent.trim();
+    return title === "\u2026" ? "" : title;
+  }
+
   function applyGeneratedTitle(text) {
     if (!outputGeneratedTitleEl) return;
     const t = String(text || "").trim();
@@ -1954,6 +1966,12 @@
       header.appendChild(meta);
       card.appendChild(header);
 
+      const generatedTitle = document.createElement("p");
+      generatedTitle.className = "favorite-generated-title";
+      generatedTitle.textContent =
+        String(fav.title || "").trim() || fallbackTitleFromPrompt(fav.positive || "");
+      card.appendChild(generatedTitle);
+
       const preview = document.createElement("p");
       preview.className = "favorite-preview";
       preview.textContent = makePreview(fav.positive || "");
@@ -2019,6 +2037,7 @@
           : positiveRaw.trim();
       return {
         name: String(name || "").trim() || "Untitled favorite",
+        title: getCurrentGeneratedTitle() || fallbackTitleFromPrompt(cleanedPositive),
         mode: currentMode === "sdxl" ? "sdxl" : "mj",
         positive: cleanedPositive,
         negative: currentMode === "sdxl" ? negativeRaw.trim() : "",
@@ -2058,7 +2077,9 @@
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
 
       outputTitleGenerationSeq += 1;
-      applyGeneratedTitle("");
+      applyGeneratedTitle(
+        String(fav.title || "").trim() || fallbackTitleFromPrompt(fav.positive || "")
+      );
 
       const target = document.querySelector(".output-panel");
       if (target && typeof target.scrollIntoView === "function") {
@@ -2155,6 +2176,9 @@
         try {
           const payload = {
             name: String(item.name || "").trim() || "Untitled favorite",
+            title:
+              String(item.title || "").trim() ||
+              fallbackTitleFromPrompt(item.positive || ""),
             mode: item.mode === "sdxl" ? "sdxl" : "mj",
             positive: String(item.positive || "").trim(),
             negative: String(item.negative || "").trim(),

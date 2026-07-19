@@ -404,6 +404,8 @@ def create_saved_prompt_route():
     positive_raw = data.get("positive")
     if not isinstance(positive_raw, str) or not positive_raw.strip():
         return jsonify({"error": "positive is required"}), 400
+    title_raw = data.get("title")
+    title = _normalize_generated_title(title_raw) if isinstance(title_raw, str) else ""
     negative_raw = data.get("negative")
     negative = negative_raw.strip() if isinstance(negative_raw, str) else ""
     tags = _clean_string_list(data.get("tags"))
@@ -420,6 +422,7 @@ def create_saved_prompt_route():
         STORAGE_DB_PATH,
         prompt_id=str(uuid.uuid4()),
         name=name_raw.strip(),
+        title=title,
         mode=mode,
         positive=positive_raw.strip(),
         negative=negative,

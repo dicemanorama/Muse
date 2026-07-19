@@ -20,6 +20,7 @@ def init_db(db_path: str, templates_json_path: str, valid_categories: set[str]) 
             CREATE TABLE IF NOT EXISTS saved_prompts (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
                 mode TEXT NOT NULL,
                 positive TEXT NOT NULL,
                 negative TEXT NOT NULL DEFAULT '',
@@ -29,6 +30,7 @@ def init_db(db_path: str, templates_json_path: str, valid_categories: set[str]) 
             )
             """
         )
+        _ensure_column(conn, "saved_prompts", "title", "TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS user_templates (
@@ -42,6 +44,16 @@ def init_db(db_path: str, templates_json_path: str, valid_categories: set[str]) 
         )
         conn.commit()
     _migrate_templates_from_json_if_empty(db_path, templates_json_path, valid_categories)
+
+
+def _ensure_column(
+    conn: sqlite3.Connection, table_name: str, column_name: str, column_sql: str
+) -> None:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    existing = {row["name"] for row in rows}
+    if column_name in existing:
+        return
+    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}")
 
 
 def _decode_tags(raw: Any) -> list[str]:
@@ -188,7 +200,7 @@ def list_saved_prompts(db_path: str) -> list[dict]:
     with _connect(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT id, name, mode, positive, negative, tags_json, free_text, created_at
+            SELECT id, name, title, mode, positive, negative, tags_json, free_text, created_at
             FROM saved_prompts
             ORDER BY created_at DESC, id DESC
             """
@@ -199,6 +211,7 @@ def list_saved_prompts(db_path: str) -> list[dict]:
             {
                 "id": row["id"],
                 "name": row["name"],
+                "title": row["title"],
                 "mode": row["mode"],
                 "positive": row["positive"],
                 "negative": row["negative"],
@@ -214,6 +227,7 @@ def create_saved_prompt(
     db_path: str,
     prompt_id: str,
     name: str,
+    title: str,
     mode: str,
     positive: str,
     negative: str,
@@ -225,12 +239,13 @@ def create_saved_prompt(
         conn.execute(
             """
             INSERT INTO saved_prompts
-            (id, name, mode, positive, negative, tags_json, free_text, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, name, title, mode, positive, negative, tags_json, free_text, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 prompt_id,
                 name,
+                title,
                 mode,
                 positive,
                 negative,
@@ -243,6 +258,7 @@ def create_saved_prompt(
     return {
         "id": prompt_id,
         "name": name,
+        "title": title,
         "mode": mode,
         "positive": positive,
         "negative": negative,
