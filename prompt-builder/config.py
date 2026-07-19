@@ -991,19 +991,7 @@ TAGS = {
 
 
 CATEGORY_TEMPLATES = {
-    "Subject": [
-        {
-            "id": "subject_me",
-            "label": "Me",
-            "tags": [
-                "lean build",
-                "rugged features",
-                "long red beard",
-                "shaved head",
-                "aviator sunglasses",
-            ],
-        }
-    ],
+    "Subject": [],
     "Location": [],
     "Action": [],
     "Style": [],

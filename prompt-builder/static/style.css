@@ -537,14 +537,28 @@ body {
 
 .template-add-btn.btn,
 .template-create-open-btn.btn,
-.template-edit-open-btn.btn {
+.template-edit-open-btn.btn,
+.template-delete-btn.btn {
   padding: 0.28rem 0.55rem;
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
 }
 
-.template-edit-open-btn.btn:disabled {
+.template-delete-btn.btn {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.35);
+  background: transparent;
+}
+
+.template-delete-btn.btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.6);
+  color: var(--danger);
+}
+
+.template-edit-open-btn.btn:disabled,
+.template-delete-btn.btn:disabled {
   display: none;
 }
 

@@ -54,6 +54,9 @@
   const templateEditOpenBtns = Array.from(
     document.querySelectorAll(".template-edit-open-btn")
   );
+  const templateDeleteBtns = Array.from(
+    document.querySelectorAll(".template-delete-btn")
+  );
   const templateListEls = Array.from(document.querySelectorAll(".template-list"));
   const tagCategoryRandomizeBtns = Array.from(
     document.querySelectorAll(".tag-category-randomize-btn")
@@ -576,14 +579,38 @@
     }) || null;
   }
 
-  function syncTemplateEditButton(category) {
+  function findTemplateDeleteButtonForCategory(category) {
+    return templateDeleteBtns.find(function (btn) {
+      return (btn.getAttribute("data-category") || "") === category;
+    }) || null;
+  }
+
+  function syncTemplateActionButtons(category) {
     const selectEl = findTemplateSelectForCategory(category);
     const editBtn = findTemplateEditButtonForCategory(category);
-    if (!selectEl || !editBtn) return;
+    const deleteBtn = findTemplateDeleteButtonForCategory(category);
+    if (!selectEl) return;
     const template = getCategoryTemplateMap(category).get(selectEl.value);
-    const canEdit = !!(template && template.is_predefined !== true);
-    editBtn.disabled = !canEdit;
-    editBtn.title = canEdit ? "" : "Only saved templates can be edited.";
+    const canModify = !!(template && template.is_predefined !== true);
+    if (editBtn) {
+      editBtn.disabled = !canModify;
+      editBtn.title = canModify ? "" : "Only saved templates can be edited.";
+    }
+    if (deleteBtn) {
+      deleteBtn.disabled = !canModify;
+      deleteBtn.title = canModify ? "" : "Only saved templates can be deleted.";
+    }
+  }
+
+  function removeTemplateOption(selectEl, templateId) {
+    if (!selectEl || !templateId) return;
+    const opt = Array.from(selectEl.options).find(function (option) {
+      return option.value === templateId;
+    });
+    if (opt) opt.remove();
+    if (selectEl.value === templateId) {
+      selectEl.value = "";
+    }
   }
 
   function parseTemplateTagsInput(value) {
@@ -651,9 +678,9 @@
 
   categoryTemplateSelectEls.forEach(function (selectEl) {
     const category = (selectEl.getAttribute("data-category") || "").trim();
-    syncTemplateEditButton(category);
+    syncTemplateActionButtons(category);
     selectEl.addEventListener("change", function () {
-      syncTemplateEditButton(category);
+      syncTemplateActionButtons(category);
     });
   });
 
@@ -706,7 +733,7 @@
         appendTemplateOption(selectEl, created);
         selectEl.value = created.id;
       }
-      syncTemplateEditButton(category);
+      syncTemplateActionButtons(category);
       const selectedIds = ensureSelectedTemplateIds(category);
       if (!selectedIds.includes(created.id)) {
         selectedIds.push(created.id);
@@ -767,7 +794,49 @@
         selectEl.value = updated.id;
       }
       renderSelectedTemplates(category);
-      syncTemplateEditButton(category);
+      syncTemplateActionButtons(category);
+      syncSelectedTags();
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          "Could not reach the server: " +
+          (err && err.message ? err.message : String(err)),
+      };
+    }
+  }
+
+  async function deleteCategoryTemplate(templateId, category) {
+    const id = String(templateId || "").trim();
+    const cat = String(category || "").trim();
+    const template = getCategoryTemplateMap(cat).get(id);
+    if (!id || !cat || !template || template.is_predefined === true) {
+      return { ok: false, error: "Select a saved template to delete." };
+    }
+
+    try {
+      const resp = await fetch("/templates/" + encodeURIComponent(id), {
+        method: "DELETE",
+      });
+      if (!resp.ok) {
+        return {
+          ok: false,
+          error: "Could not delete template (HTTP " + resp.status + ").",
+        };
+      }
+
+      getCategoryTemplateMap(cat).delete(id);
+      const selectedIds = ensureSelectedTemplateIds(cat).filter(function (selectedId) {
+        return selectedId !== id;
+      });
+      selectedTemplatesByCategory.set(cat, selectedIds);
+      const selectEl = findTemplateSelectForCategory(cat);
+      if (selectEl) {
+        removeTemplateOption(selectEl, id);
+      }
+      renderSelectedTemplates(cat);
+      syncTemplateActionButtons(cat);
       syncSelectedTags();
       return { ok: true };
     } catch (err) {
@@ -913,6 +982,21 @@
         const selectEl = findTemplateSelectForCategory(category);
         if (!selectEl || !selectEl.value) return;
         openEditModal(category, selectEl.value);
+      });
+    });
+
+    templateDeleteBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const category = (btn.getAttribute("data-category") || "").trim();
+        const selectEl = findTemplateSelectForCategory(category);
+        if (!selectEl || !selectEl.value) return;
+        const template = getCategoryTemplateMap(category).get(selectEl.value);
+        if (!template || template.is_predefined === true) return;
+        if (!confirm('Delete template "' + (template.label || "") + '"?')) return;
+        deleteCategoryTemplate(selectEl.value, category).then(function (result) {
+          if (result && result.ok) return;
+          alert((result && result.error) || "Could not delete template.");
+        });
       });
     });
 

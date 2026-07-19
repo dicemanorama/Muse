@@ -232,6 +232,15 @@
               </button>
               <button
                 type="button"
+                class="btn template-delete-btn"
+                data-category="{{ category | e }}"
+                aria-label="Delete selected {{ category }} template"
+                disabled
+              >
+                Delete Template
+              </button>
+              <button
+                type="button"
                 class="btn template-add-btn"
                 data-category="{{ category | e }}"
               >
