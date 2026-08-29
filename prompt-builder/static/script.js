@@ -1291,7 +1291,7 @@
     return rawTerms.join(", ");
   }
 
-  function ensureModelOptions(models, defaultModel) {
+  function ensureModelOptions(models, defaultModel, localDefaultModel) {
     if (!modelSelect) return;
 
     modelMeta.clear();
@@ -1324,6 +1324,10 @@
       typeof defaultModel === "string" && defaultModel.trim()
         ? defaultModel.trim()
         : DEFAULT_MODEL;
+    const localFallbackModel =
+      typeof localDefaultModel === "string" && localDefaultModel.trim()
+        ? localDefaultModel.trim()
+        : "";
     const optionValues = names.length ? names : [fallbackModel];
     modelSelect.innerHTML = "";
 
@@ -1389,19 +1393,29 @@
       return !(meta && meta.disabled);
     }
 
+    function providerFor(model) {
+      const meta = modelMeta.get(model);
+      return (meta && meta.provider) || "other";
+    }
+
     const enabledValues = optionValues.filter(isEnabled);
+    const enabledOllamaValues = enabledValues.filter(function (model) {
+      return providerFor(model) === "ollama";
+    });
     const preferred =
       enabledValues.includes(DEFAULT_MODEL)
         ? DEFAULT_MODEL
-        : enabledValues.includes(fallbackModel)
+        : enabledOllamaValues.includes(localFallbackModel)
+          ? localFallbackModel
+        : enabledOllamaValues.includes(fallbackModel)
           ? fallbackModel
-          : enabledValues[0] || optionValues[0];
+          : enabledOllamaValues[0] || enabledValues[0] || optionValues[0];
     modelSelect.value = preferred;
   }
 
   async function loadModels() {
     if (!modelSelect) return;
-    ensureModelOptions([], DEFAULT_MODEL);
+    ensureModelOptions([], DEFAULT_MODEL, "");
     try {
       const resp = await fetch("/models");
       if (!resp.ok) {
@@ -1412,7 +1426,7 @@
         return;
       }
       const data = await resp.json();
-      ensureModelOptions(data.models, data.default_model);
+      ensureModelOptions(data.models, data.default_model, data.local_default_model);
       if (data && data.error) {
         setModelStatus("error", data.error);
       } else if (

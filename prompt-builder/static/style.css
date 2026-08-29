@@ -295,6 +295,10 @@ body {
   border: none;
 }
 
+.aspect-fieldset:last-child {
+  margin-bottom: 0;
+}
+
 .aspect-fieldset .field-label {
   padding: 0;
 }

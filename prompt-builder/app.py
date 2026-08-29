@@ -16,6 +16,7 @@ from config import (
     CATEGORY_TEMPLATES,
     MJ_SYSTEM_PROMPT,
     MODEL_NAME,
+    OLLAMA_MODEL,
     OLLAMA_URL,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
@@ -189,6 +190,11 @@ def _normalize_models(payload: dict) -> list[dict]:
         name = raw.strip()
         if not name or name in seen:
             continue
+
+        capabilities = item.get("capabilities")
+        if isinstance(capabilities, list) and "completion" not in capabilities:
+            continue
+
         seen.add(name)
 
         size_bytes = item.get("size")
@@ -610,6 +616,7 @@ def list_models():
                 {
                     "models": openrouter_entries,
                     "default_model": MODEL_NAME,
+                    "local_default_model": OLLAMA_MODEL,
                     "error": f"Ollama returned HTTP {e.code} from {_ollama_tags_url()}",
                 }
             ),
@@ -621,6 +628,7 @@ def list_models():
                 {
                     "models": openrouter_entries,
                     "default_model": MODEL_NAME,
+                    "local_default_model": OLLAMA_MODEL,
                     "error": f"Could not reach Ollama at {_ollama_tags_url()}: {e.reason}",
                 }
             ),
@@ -632,6 +640,7 @@ def list_models():
                 {
                     "models": openrouter_entries,
                     "default_model": MODEL_NAME,
+                    "local_default_model": OLLAMA_MODEL,
                     "error": f"Failed to read models from Ollama: {e}",
                 }
             ),
@@ -641,6 +650,7 @@ def list_models():
     payload = {
         "models": _normalize_models(data) + openrouter_entries,
         "default_model": MODEL_NAME,
+        "local_default_model": OLLAMA_MODEL,
     }
     if openrouter_error:
         payload["error"] = openrouter_error
