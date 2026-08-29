@@ -16,8 +16,19 @@
       </header>
 
       <main class="main">
-        <section class="panel" aria-labelledby="platform-heading">
-          <h2 id="platform-heading" class="panel-title">Platform</h2>
+        <section class="panel platform-panel" aria-labelledby="platform-heading">
+          <div class="panel-heading-row">
+            <h2 id="platform-heading" class="panel-title">Platform</h2>
+            <button
+              type="button"
+              class="btn btn-mini platform-settings-toggle"
+              id="platform-settings-toggle"
+              aria-expanded="false"
+              aria-controls="platform-settings"
+            >
+              Settings
+            </button>
+          </div>
 
           <p class="field-label" id="output-mode-label">Output mode</p>
           <div
@@ -44,6 +55,7 @@
             </button>
           </div>
 
+          <div id="platform-settings" class="platform-settings" hidden>
           <div id="mj-params" class="param-panel">
             <fieldset class="param-fieldset">
               <legend class="field-label">Midjourney parameters</legend>
@@ -176,22 +188,62 @@
               </label>
             </div>
           </fieldset>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="freetext-heading">
+          <h2 id="freetext-heading" class="panel-title">Free Text</h2>
+          <label class="field-label" for="free-text">Free text</label>
+          <textarea
+            id="free-text"
+            class="free-text"
+            name="free_text"
+            rows="3"
+            placeholder="Optional: mood, subject details, or anything not covered by tags."
+            autocomplete="off"
+          ></textarea>
         </section>
 
         <section class="panel" aria-labelledby="tags-heading">
-          <h2 id="tags-heading" class="panel-title">Tags</h2>
+          <div class="panel-heading-row">
+            <h2 id="tags-heading" class="panel-title">Tags</h2>
+            <button type="button" class="btn tags-randomize-btn" id="tags-randomize-btn">
+              Randomize All
+            </button>
+          </div>
+          <div class="tag-card-grid">
           {% for category, values in tags.items() %}
-          <div class="tag-group">
+          <div class="tag-group tag-card">
             <div class="tag-group-header">
               <h3 class="category-label">{{ category }}</h3>
-              <button
-                type="button"
-                class="btn btn-mini tag-category-randomize-btn"
-                data-category="{{ category | e }}"
-                aria-label="Randomize {{ category }} tag"
-              >
-                Randomize
-              </button>
+              <div class="tag-card-actions">
+                <button
+                  type="button"
+                  class="btn btn-mini tag-category-none-btn"
+                  data-category="{{ category | e }}"
+                  aria-label="Clear {{ category }} selection"
+                >
+                  None
+                </button>
+                <label class="tag-lock-control" title="Keep this category when randomizing all">
+                  <input
+                    type="checkbox"
+                    class="tag-category-lock"
+                    data-category="{{ category | e }}"
+                    aria-label="Lock {{ category }} selection"
+                  />
+                  <span aria-hidden="true">✓</span>
+                  <span>Lock</span>
+                </label>
+                <button
+                  type="button"
+                  class="btn btn-mini tag-category-randomize-btn"
+                  data-category="{{ category | e }}"
+                  aria-label="Randomize {{ category }} tag"
+                >
+                  Randomize
+                </button>
+              </div>
             </div>
             <select
               class="param-select tag-select"
@@ -269,22 +321,12 @@
             </div>
           </div>
           {% endfor %}
-          <button type="button" class="btn" id="tags-randomize-btn">
-            Randomize All
-          </button>
-        </section>
-
-        <section class="panel" aria-labelledby="freetext-heading">
-          <h2 id="freetext-heading" class="panel-title">Free Text</h2>
-          <label class="field-label" for="free-text">Free text</label>
-          <textarea
-            id="free-text"
-            class="free-text"
-            name="free_text"
-            rows="3"
-            placeholder="Optional: mood, subject details, or anything not covered by tags."
-            autocomplete="off"
-          ></textarea>
+          </div>
+          <div class="tags-bottom-actions">
+            <button type="button" class="btn tags-randomize-btn">
+              Randomize All
+            </button>
+          </div>
         </section>
 
         <section class="panel" aria-labelledby="model-controls-heading">
