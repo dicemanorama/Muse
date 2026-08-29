@@ -26,6 +26,8 @@
   const generationStatusEl = document.getElementById("generation-status");
   const copyPositiveBtn = document.getElementById("copy-positive-btn");
   const copyNegativeBtn = document.getElementById("copy-negative-btn");
+  const stickyCopyPositiveBtn = document.getElementById("sticky-copy-positive-btn");
+  const stickyPromptTitleEl = document.getElementById("sticky-prompt-title");
   const clearBtn = document.getElementById("clear-btn");
   const aspectDisplay = document.getElementById("aspect-display");
   const aspectRadios = document.querySelectorAll('input[name="aspect_ratio"]');
@@ -294,16 +296,29 @@
     return title === "\u2026" ? "" : title;
   }
 
+  function syncStickyPromptBar(hasContent) {
+    if (stickyPromptTitleEl) {
+      const title = getCurrentGeneratedTitle();
+      stickyPromptTitleEl.textContent =
+        title || (hasContent ? "Prompt ready" : "No prompt yet");
+    }
+    if (stickyCopyPositiveBtn) {
+      stickyCopyPositiveBtn.disabled = !hasContent;
+    }
+  }
+
   function applyGeneratedTitle(text) {
     if (!outputGeneratedTitleEl) return;
     const t = String(text || "").trim();
     if (!t) {
       outputGeneratedTitleEl.hidden = true;
       outputGeneratedTitleEl.textContent = "";
+      syncStickyPromptBar(!!(outputPositive && outputPositive.value.trim()));
       return;
     }
     outputGeneratedTitleEl.hidden = false;
     outputGeneratedTitleEl.textContent = t;
+    syncStickyPromptBar(!!(outputPositive && outputPositive.value.trim()));
   }
 
   function scheduleGeneratedTitleFromOutput(modelName) {
@@ -360,6 +375,7 @@
     const has = !!hasContent;
     if (refineBtn) refineBtn.disabled = !has;
     if (saveFavoriteBtn) saveFavoriteBtn.hidden = !has;
+    syncStickyPromptBar(has);
   }
 
   function setGenerating(isGenerating) {
@@ -1791,6 +1807,12 @@
 
   if (copyPositiveBtn) {
     copyPositiveBtn.addEventListener("click", function () {
+      copyTextareaValue(outputPositive);
+    });
+  }
+
+  if (stickyCopyPositiveBtn) {
+    stickyCopyPositiveBtn.addEventListener("click", function () {
       copyTextareaValue(outputPositive);
     });
   }
