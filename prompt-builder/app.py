@@ -34,9 +34,6 @@ from db import (
 )
 
 
-_OPENROUTER_MODELS_CACHE: dict[str, object] = {"loaded_at": 0.0, "models": []}
-
-
 def _is_openrouter_model(name: str) -> bool:
     return isinstance(name, str) and bool(name.strip())
 
@@ -156,66 +153,12 @@ def _openrouter_model_entries() -> list[dict]:
 
 
 def _fetch_openrouter_model_entries() -> tuple[list[dict], str | None]:
-    fallback = _openrouter_model_entries()
     if not OPENROUTER_API_KEY:
-        return fallback, "OPENROUTER_API_KEY not set in .env - OpenRouter models disabled."
-
-    now = time.time()
-    cached_models = _OPENROUTER_MODELS_CACHE.get("models")
-    loaded_at = _OPENROUTER_MODELS_CACHE.get("loaded_at")
-    if (
-        isinstance(cached_models, list)
-        and cached_models
-        and isinstance(loaded_at, (int, float))
-        and now - loaded_at < 900
-    ):
-        return cached_models, None
-
-    try:
-        resp = requests.get(
-            f"{OPENROUTER_BASE_URL}/models",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            timeout=15,
+        return (
+            _openrouter_model_entries(),
+            "OPENROUTER_API_KEY not set in .env - OpenRouter models disabled.",
         )
-        resp.raise_for_status()
-        payload = resp.json()
-    except (requests.exceptions.RequestException, ValueError) as e:
-        return fallback, f"Could not load OpenRouter model catalog; showing fallback models. {e}"
-
-    raw_models = payload.get("data")
-    if not isinstance(raw_models, list):
-        return fallback, "OpenRouter model catalog response was not in the expected format."
-
-    by_id: dict[str, dict] = {}
-    for item in raw_models:
-        if not isinstance(item, dict):
-            continue
-        model_id = item.get("id")
-        if not isinstance(model_id, str) or not model_id.strip():
-            continue
-        model = model_id.strip()
-        label_raw = item.get("name")
-        label = label_raw.strip() if isinstance(label_raw, str) and label_raw.strip() else model
-        by_id[model] = {
-            "name": model,
-            "label": label,
-            "size_gb": None,
-            "family": "openrouter",
-            "parameter_size": None,
-            "provider": "openrouter",
-            "disabled": False,
-        }
-
-    if not by_id:
-        return fallback, "OpenRouter model catalog returned no models; showing fallback models."
-
-    entries = []
-    if OPENROUTER_MODEL in by_id:
-        entries.append(by_id.pop(OPENROUTER_MODEL))
-    entries.extend(sorted(by_id.values(), key=lambda entry: entry["name"].casefold()))
-    _OPENROUTER_MODELS_CACHE["loaded_at"] = now
-    _OPENROUTER_MODELS_CACHE["models"] = entries
-    return entries, None
+    return _openrouter_model_entries(), None
 
 
 def _load_user_templates() -> list[dict]:
