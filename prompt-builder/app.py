@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import io
 import json
 import os
 import time
-from urllib.parse import urlsplit
-import urllib.error
-import urllib.request
 import uuid
 
 import requests
@@ -16,10 +12,9 @@ from config import (
     CATEGORY_TEMPLATES,
     MJ_SYSTEM_PROMPT,
     MODEL_NAME,
-    OLLAMA_MODEL,
-    OLLAMA_URL,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
+    OPENROUTER_FALLBACK_MODELS,
     OPENROUTER_MODEL,
     REFINE_SYSTEM_PROMPT,
     SDXL_SYSTEM_PROMPT,
@@ -38,8 +33,12 @@ from db import (
     update_user_template,
 )
 
+
+_OPENROUTER_MODELS_CACHE: dict[str, object] = {"loaded_at": 0.0, "models": []}
+
+
 def _is_openrouter_model(name: str) -> bool:
-    return isinstance(name, str) and name == OPENROUTER_MODEL
+    return isinstance(name, str) and bool(name.strip())
 
 
 def _openrouter_chat_stream(model: str, system: str, user: str):
@@ -93,50 +92,10 @@ def _openrouter_chat_stream(model: str, system: str, user: str):
     except requests.exceptions.RequestException as e:
         yield f"\n[OpenRouter error: {e}]"
 
-def _ollama_chat_stream(model: str, system: str, user: str):
-    """Stream completion tokens from Ollama's /api/generate as plain strings."""
-    payload = {
-        "model": model,
-        "prompt": user,
-        "system": system,
-        "stream": True,
-        "keep_alive": "10m",
-    }
-    req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            text = io.TextIOWrapper(resp, encoding="utf-8")
-            for line in text:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                chunk = obj.get("response") or ""
-                if chunk:
-                    yield chunk
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        yield f"\n[Ollama error {e.code}: {err_body}]"
-    except urllib.error.URLError as e:
-        yield f"\n[Error contacting Ollama: {e.reason}]"
-    except OSError as e:
-        yield f"\n[Error: {e}]"
-
 
 def _llm_stream(model: str, system: str, user: str):
-    """Dispatch to OpenRouter or Ollama based on the selected model."""
-    if _is_openrouter_model(model):
-        yield from _openrouter_chat_stream(model, system, user)
-        return
-    yield from _ollama_chat_stream(model, system, user)
+    """Stream from OpenRouter using the selected model id."""
+    yield from _openrouter_chat_stream(model, system, user)
 
 
 def _collect_llm_response(model: str, system: str, user: str) -> str:
@@ -168,76 +127,95 @@ VALID_TEMPLATE_CATEGORIES = set(TAGS.keys())
 init_db(STORAGE_DB_PATH, TEMPLATES_PATH, VALID_TEMPLATE_CATEGORIES)
 
 
-def _ollama_tags_url() -> str:
-    parts = urlsplit(OLLAMA_URL)
-    if not parts.scheme or not parts.netloc:
-        return "http://localhost:11434/api/tags"
-    return f"{parts.scheme}://{parts.netloc}/api/tags"
-
-
-def _normalize_models(payload: dict) -> list[dict]:
-    models = payload.get("models")
-    if not isinstance(models, list):
-        return []
-    out: list[dict] = []
-    seen: set[str] = set()
-    for item in models:
-        if not isinstance(item, dict):
-            continue
-        raw = item.get("name")
-        if not isinstance(raw, str):
-            continue
-        name = raw.strip()
-        if not name or name in seen:
-            continue
-
-        capabilities = item.get("capabilities")
-        if isinstance(capabilities, list) and "completion" not in capabilities:
-            continue
-
-        seen.add(name)
-
-        size_bytes = item.get("size")
-        size_gb = None
-        if isinstance(size_bytes, (int, float)) and size_bytes > 0:
-            size_gb = round(size_bytes / (1024 ** 3), 2)
-
-        details = item.get("details")
-        family = None
-        param_size = None
-        if isinstance(details, dict):
-            fam_raw = details.get("family")
-            if isinstance(fam_raw, str) and fam_raw.strip():
-                family = fam_raw.strip()
-            param_raw = details.get("parameter_size")
-            if isinstance(param_raw, str) and param_raw.strip():
-                param_size = param_raw.strip()
-
-        out.append(
-            {
-                "name": name,
-                "size_gb": size_gb,
-                "family": family,
-                "parameter_size": param_size,
-                "provider": "ollama",
-            }
-        )
-    return out
-
-
 def _openrouter_model_entries() -> list[dict]:
     disabled = not OPENROUTER_API_KEY
-    return [
-        {
-            "name": OPENROUTER_MODEL,
-            "label": OPENROUTER_MODEL,
+    seen: set[str] = set()
+    entries: list[dict] = []
+
+    def add_entry(model_id: str, label: str | None = None) -> None:
+        model = model_id.strip()
+        if not model or model in seen:
+            return
+        seen.add(model)
+        entries.append(
+            {
+                "name": model,
+                "label": (label or model).strip() or model,
+                "size_gb": None,
+                "family": "openrouter",
+                "parameter_size": None,
+                "provider": "openrouter",
+                "disabled": disabled,
+            }
+        )
+
+    add_entry(OPENROUTER_MODEL)
+    for model in OPENROUTER_FALLBACK_MODELS:
+        add_entry(model)
+    return entries
+
+
+def _fetch_openrouter_model_entries() -> tuple[list[dict], str | None]:
+    fallback = _openrouter_model_entries()
+    if not OPENROUTER_API_KEY:
+        return fallback, "OPENROUTER_API_KEY not set in .env - OpenRouter models disabled."
+
+    now = time.time()
+    cached_models = _OPENROUTER_MODELS_CACHE.get("models")
+    loaded_at = _OPENROUTER_MODELS_CACHE.get("loaded_at")
+    if (
+        isinstance(cached_models, list)
+        and cached_models
+        and isinstance(loaded_at, (int, float))
+        and now - loaded_at < 900
+    ):
+        return cached_models, None
+
+    try:
+        resp = requests.get(
+            f"{OPENROUTER_BASE_URL}/models",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except (requests.exceptions.RequestException, ValueError) as e:
+        return fallback, f"Could not load OpenRouter model catalog; showing fallback models. {e}"
+
+    raw_models = payload.get("data")
+    if not isinstance(raw_models, list):
+        return fallback, "OpenRouter model catalog response was not in the expected format."
+
+    by_id: dict[str, dict] = {}
+    for item in raw_models:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or not model_id.strip():
+            continue
+        model = model_id.strip()
+        label_raw = item.get("name")
+        label = label_raw.strip() if isinstance(label_raw, str) and label_raw.strip() else model
+        by_id[model] = {
+            "name": model,
+            "label": label,
             "size_gb": None,
             "family": "openrouter",
             "parameter_size": None,
             "provider": "openrouter",
-            "disabled": disabled,
+            "disabled": False,
         }
-    ]
+
+    if not by_id:
+        return fallback, "OpenRouter model catalog returned no models; showing fallback models."
+
+    entries = []
+    if OPENROUTER_MODEL in by_id:
+        entries.append(by_id.pop(OPENROUTER_MODEL))
+    entries.extend(sorted(by_id.values(), key=lambda entry: entry["name"].casefold()))
+    _OPENROUTER_MODELS_CACHE["loaded_at"] = now
+    _OPENROUTER_MODELS_CACHE["models"] = entries
+    return entries, None
 
 
 def _load_user_templates() -> list[dict]:
@@ -596,62 +574,8 @@ def prompt_title():
 
 @app.route("/models", methods=["GET"])
 def list_models():
-    openrouter_entries = _openrouter_model_entries()
-    openrouter_error = None
-    if not OPENROUTER_API_KEY:
-        openrouter_error = "OPENROUTER_API_KEY not set in .env - OpenRouter model disabled."
-
-    req = urllib.request.Request(
-        _ollama_tags_url(),
-        headers={"Content-Type": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode("utf-8")
-            data = json.loads(raw)
-    except urllib.error.HTTPError as e:
-        return (
-            jsonify(
-                {
-                    "models": openrouter_entries,
-                    "default_model": MODEL_NAME,
-                    "local_default_model": OLLAMA_MODEL,
-                    "error": f"Ollama returned HTTP {e.code} from {_ollama_tags_url()}",
-                }
-            ),
-            200,
-        )
-    except urllib.error.URLError as e:
-        return (
-            jsonify(
-                {
-                    "models": openrouter_entries,
-                    "default_model": MODEL_NAME,
-                    "local_default_model": OLLAMA_MODEL,
-                    "error": f"Could not reach Ollama at {_ollama_tags_url()}: {e.reason}",
-                }
-            ),
-            200,
-        )
-    except (OSError, json.JSONDecodeError) as e:
-        return (
-            jsonify(
-                {
-                    "models": openrouter_entries,
-                    "default_model": MODEL_NAME,
-                    "local_default_model": OLLAMA_MODEL,
-                    "error": f"Failed to read models from Ollama: {e}",
-                }
-            ),
-            200,
-        )
-
-    payload = {
-        "models": _normalize_models(data) + openrouter_entries,
-        "default_model": MODEL_NAME,
-        "local_default_model": OLLAMA_MODEL,
-    }
+    openrouter_entries, openrouter_error = _fetch_openrouter_model_entries()
+    payload = {"models": openrouter_entries, "default_model": MODEL_NAME}
     if openrouter_error:
         payload["error"] = openrouter_error
     return jsonify(payload)
@@ -663,56 +587,15 @@ def warmup():
     model_raw = data.get("model", "")
     model_name = (model_raw.strip() if isinstance(model_raw, str) else "") or MODEL_NAME
 
-    if _is_openrouter_model(model_name):
-        if not OPENROUTER_API_KEY:
-            return jsonify(
-                {
-                    "ok": False,
-                    "model": model_name,
-                    "error": "OPENROUTER_API_KEY not set in .env",
-                }
-            )
-        return jsonify({"ok": True, "model": model_name, "load_seconds": 0})
-
-    payload = {
-        "model": model_name,
-        "prompt": "",
-        "stream": False,
-        "keep_alive": "10m",
-    }
-    req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            obj = json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        return (
-            jsonify({"ok": False, "model": model_name, "error": f"HTTP {e.code}: {body}"}),
-            200,
+    if not OPENROUTER_API_KEY:
+        return jsonify(
+            {
+                "ok": False,
+                "model": model_name,
+                "error": "OPENROUTER_API_KEY not set in .env",
+            }
         )
-    except urllib.error.URLError as e:
-        return (
-            jsonify({"ok": False, "model": model_name, "error": f"URL error: {e.reason}"}),
-            200,
-        )
-    except (OSError, json.JSONDecodeError) as e:
-        return (
-            jsonify({"ok": False, "model": model_name, "error": f"Error: {e}"}),
-            200,
-        )
-
-    load_ns = obj.get("load_duration")
-    load_seconds = None
-    if isinstance(load_ns, (int, float)) and load_ns > 0:
-        load_seconds = round(load_ns / 1_000_000_000, 2)
-
-    return jsonify({"ok": True, "model": model_name, "load_seconds": load_seconds})
+    return jsonify({"ok": True, "model": model_name, "load_seconds": 0})
 
 
 if __name__ == "__main__":

@@ -31,8 +31,31 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_MODEL = os.environ.get(
     "OPENROUTER_MODEL", "google/gemma-3-12b-it"
 ).strip()
+OPENROUTER_FALLBACK_MODELS = [
+    model.strip()
+    for model in os.environ.get(
+        "OPENROUTER_FALLBACK_MODELS",
+        ",".join(
+            [
+                "google/gemma-3-12b-it",
+                "openai/gpt-4o-mini",
+                "openai/gpt-4o",
+                "anthropic/claude-3.5-sonnet",
+                "anthropic/claude-3-haiku",
+                "google/gemini-flash-1.5",
+                "google/gemini-pro-1.5",
+                "meta-llama/llama-3.1-8b-instruct",
+                "meta-llama/llama-3.1-70b-instruct",
+                "mistralai/mistral-7b-instruct",
+                "mistralai/mixtral-8x7b-instruct",
+                "qwen/qwen-2.5-72b-instruct",
+            ]
+        ),
+    ).split(",")
+    if model.strip()
+]
 
-MODEL_NAME = OPENROUTER_MODEL if OPENROUTER_API_KEY else OLLAMA_MODEL
+MODEL_NAME = OPENROUTER_MODEL
 
 if not OPENROUTER_API_KEY:
     print(

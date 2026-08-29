@@ -74,7 +74,7 @@
     "platform-settings-toggle"
   );
   const platformSettings = document.getElementById("platform-settings");
-  const DEFAULT_MODEL = "llama-3.1-8b-instant";
+  const DEFAULT_MODEL = "google/gemma-3-12b-it";
 
   const warmModels = new Set();
   let warmupSeq = 0;
@@ -1291,7 +1291,7 @@
     return rawTerms.join(", ");
   }
 
-  function ensureModelOptions(models, defaultModel, localDefaultModel) {
+  function ensureModelOptions(models, defaultModel) {
     if (!modelSelect) return;
 
     modelMeta.clear();
@@ -1324,10 +1324,6 @@
       typeof defaultModel === "string" && defaultModel.trim()
         ? defaultModel.trim()
         : DEFAULT_MODEL;
-    const localFallbackModel =
-      typeof localDefaultModel === "string" && localDefaultModel.trim()
-        ? localDefaultModel.trim()
-        : "";
     const optionValues = names.length ? names : [fallbackModel];
     modelSelect.innerHTML = "";
 
@@ -1357,12 +1353,11 @@
       return opt;
     }
 
-    const grouped = { ollama: [], openrouter: [], other: [] };
+    const grouped = { openrouter: [], other: [] };
     optionValues.forEach(function (model) {
       const meta = modelMeta.get(model);
       const provider = (meta && meta.provider) || "other";
-      if (provider === "ollama") grouped.ollama.push(model);
-      else if (provider === "openrouter") grouped.openrouter.push(model);
+      if (provider === "openrouter") grouped.openrouter.push(model);
       else grouped.other.push(model);
     });
 
@@ -1376,8 +1371,7 @@
       modelSelect.appendChild(og);
     }
 
-    if (grouped.ollama.length > 0 || grouped.openrouter.length > 0) {
-      appendGroup("Ollama (local)", grouped.ollama);
+    if (grouped.openrouter.length > 0) {
       appendGroup("OpenRouter (cloud)", grouped.openrouter);
       grouped.other.forEach(function (model) {
         modelSelect.appendChild(makeOption(model));
@@ -1393,29 +1387,19 @@
       return !(meta && meta.disabled);
     }
 
-    function providerFor(model) {
-      const meta = modelMeta.get(model);
-      return (meta && meta.provider) || "other";
-    }
-
     const enabledValues = optionValues.filter(isEnabled);
-    const enabledOllamaValues = enabledValues.filter(function (model) {
-      return providerFor(model) === "ollama";
-    });
     const preferred =
       enabledValues.includes(DEFAULT_MODEL)
         ? DEFAULT_MODEL
-        : enabledOllamaValues.includes(localFallbackModel)
-          ? localFallbackModel
-        : enabledOllamaValues.includes(fallbackModel)
+        : enabledValues.includes(fallbackModel)
           ? fallbackModel
-          : enabledOllamaValues[0] || enabledValues[0] || optionValues[0];
+          : enabledValues[0] || optionValues[0];
     modelSelect.value = preferred;
   }
 
   async function loadModels() {
     if (!modelSelect) return;
-    ensureModelOptions([], DEFAULT_MODEL, "");
+    ensureModelOptions([], DEFAULT_MODEL);
     try {
       const resp = await fetch("/models");
       if (!resp.ok) {
@@ -1426,7 +1410,7 @@
         return;
       }
       const data = await resp.json();
-      ensureModelOptions(data.models, data.default_model, data.local_default_model);
+      ensureModelOptions(data.models, data.default_model);
       if (data && data.error) {
         setModelStatus("error", data.error);
       } else if (
@@ -1435,7 +1419,7 @@
       ) {
         setModelStatus(
           "error",
-          "Ollama returned no models. Run 'ollama list' to confirm installations."
+          "OpenRouter returned no models. Check OPENROUTER_API_KEY in .env."
         );
       } else {
         setModelStatus("idle", "");
