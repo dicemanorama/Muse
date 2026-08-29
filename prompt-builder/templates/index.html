@@ -9,10 +9,10 @@
     <meta name="apple-mobile-web-app-title" content="Muse" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Image Prompt Builder</title>
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='3') }}" />
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='3') }}" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='3') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='3') }}" />
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='7') }}" />
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='7') }}" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='7') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='7') }}" />
   </head>
   <body>
     <div class="page">
@@ -67,7 +67,15 @@
               data-mode="sdxl"
               aria-pressed="false"
             >
-              SDXL / ComfyUI
+              ComfyUI
+            </button>
+            <button
+              type="button"
+              class="output-mode-option"
+              data-mode="other"
+              aria-pressed="false"
+            >
+              Grok/Other
             </button>
           </div>
 
@@ -210,6 +218,9 @@
               </label>
             </div>
           </fieldset>
+          <p id="aspect-other-note" class="aspect-mode-note" hidden>
+            For Grok/Other, set the aspect ratio in Grok. This setting is not used or appended.
+          </p>
         </section>
 
         <section class="panel" aria-labelledby="freetext-heading">
@@ -391,7 +402,7 @@
             aria-live="polite"
           ></p>
           <p class="aspect-ref" id="aspect-ref">
-            Aspect ratio: <span id="aspect-display">1:1</span>
+            Aspect ratio: <span id="aspect-display">4:5</span>
           </p>
           <label class="field-label" for="output-positive">Prompt</label>
           <textarea
@@ -423,7 +434,7 @@
               class="output"
               readonly
               rows="9"
-              placeholder="Negative prompt (SDXL mode)."
+              placeholder="Negative prompt (ComfyUI mode)."
             ></textarea>
             <div class="output-inline-actions">
               <button type="button" class="btn" id="copy-negative-btn">
@@ -438,7 +449,7 @@
               class="output"
               readonly
               rows="6"
-              placeholder="Generation settings (SDXL mode)."
+              placeholder="Generation settings (ComfyUI mode)."
             ></textarea>
           </div>
           <div class="output-actions">
@@ -479,11 +490,8 @@
         <span id="sticky-prompt-title" class="prompt-sticky-title">No prompt yet</span>
       </div>
       <div class="prompt-sticky-actions">
-        <button type="button" class="btn tags-randomize-btn" id="sticky-randomize-btn">
-          Randomize
-        </button>
-        <button type="button" class="btn btn-primary" id="sticky-generate-btn">
-          Generate
+        <button type="button" class="btn btn-primary" id="sticky-randomize-generate-btn">
+          Randomize + Generate
         </button>
         <button type="button" class="btn btn-primary" id="sticky-copy-positive-btn" disabled>
           Copy Prompt
@@ -570,6 +578,6 @@
     <script>
       window.CATEGORY_TEMPLATES = {{ category_templates | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='3') }}" defer></script>
+    <script src="{{ url_for('static', filename='script.js', v='7') }}" defer></script>
   </body>
 </html>

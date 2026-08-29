@@ -15,6 +15,7 @@
   const selectedCustomTagsByCategory = new Map();
   const selectedTemplateTagsByCategory = new Map();
   const templateCatalogByCategory = new Map();
+  const VALID_OUTPUT_MODES = new Set(["mj", "sdxl", "other"]);
 
   let currentMode = "mj";
   let outputTitleGenerationSeq = 0;
@@ -36,9 +37,12 @@
   const copyNegativeBtn = document.getElementById("copy-negative-btn");
   const stickyCopyPositiveBtn = document.getElementById("sticky-copy-positive-btn");
   const stickyPromptTitleEl = document.getElementById("sticky-prompt-title");
-  const stickyGenerateBtn = document.getElementById("sticky-generate-btn");
+  const stickyRandomizeGenerateBtn = document.getElementById(
+    "sticky-randomize-generate-btn"
+  );
   const clearBtn = document.getElementById("clear-btn");
   const aspectDisplay = document.getElementById("aspect-display");
+  const aspectOtherNote = document.getElementById("aspect-other-note");
   const aspectRadios = document.querySelectorAll('input[name="aspect_ratio"]');
   const mjParamsEl = document.getElementById("mj-params");
   const sdxlParamsEl = document.getElementById("sdxl-params");
@@ -86,6 +90,20 @@
   );
   const platformSettings = document.getElementById("platform-settings");
   const DEFAULT_MODEL = "google/gemma-3-12b-it";
+  const THINKING_SCROLLS = [
+    "Arranging the visual ingredients",
+    "Shuffling the mood board",
+    "Finding the strongest subject-first angle",
+    "Tuning the light and atmosphere",
+    "Composing the frame",
+    "Polishing the creative brief",
+    "Balancing detail and restraint",
+    "Threading the scene together",
+    "Sharpening the first impression",
+    "Checking the color story",
+    "Giving the idea a little lift",
+    "Clearing space for the image",
+  ];
 
   const warmModels = new Set();
   let warmupSeq = 0;
@@ -230,6 +248,17 @@
     });
   }
 
+  function normalizeOutputMode(mode) {
+    const cleaned = String(mode || "").trim().toLowerCase();
+    return VALID_OUTPUT_MODES.has(cleaned) ? cleaned : "mj";
+  }
+
+  function outputModeLabel(mode) {
+    if (mode === "sdxl") return "ComfyUI";
+    if (mode === "other") return "Other";
+    return "MJ";
+  }
+
   function applyModeUi() {
     if (mjParamsEl) mjParamsEl.hidden = currentMode !== "mj";
     if (sdxlParamsEl) sdxlParamsEl.hidden = currentMode !== "sdxl";
@@ -238,6 +267,9 @@
     }
     if (outputSettingsWrap) {
       outputSettingsWrap.hidden = currentMode !== "sdxl";
+    }
+    if (aspectOtherNote) {
+      aspectOtherNote.hidden = currentMode !== "other";
     }
     modeOptions.forEach(function (btn) {
       const m = btn.getAttribute("data-mode");
@@ -398,6 +430,20 @@
     }
   }
 
+  function pickThinkingScroll(previous) {
+    if (!THINKING_SCROLLS.length) return "Thinking";
+    if (THINKING_SCROLLS.length === 1) return THINKING_SCROLLS[0];
+    let next = previous;
+    while (next === previous) {
+      next = THINKING_SCROLLS[Math.floor(Math.random() * THINKING_SCROLLS.length)];
+    }
+    return next;
+  }
+
+  function formatThinkingScroll(text, secs) {
+    return text + "... " + secs + " s";
+  }
+
   function setModelStatus(state, text) {
     if (!modelStatusEl) return;
     modelStatusEl.dataset.state = state || "idle";
@@ -493,8 +539,8 @@
 
   modeOptions.forEach(function (opt) {
     opt.addEventListener("click", function () {
-      const mode = opt.getAttribute("data-mode");
-      if (!mode || mode === currentMode) return;
+      const mode = normalizeOutputMode(opt.getAttribute("data-mode"));
+      if (mode === currentMode) return;
       currentMode = mode;
       applyModeUi();
       clearOutputs();
@@ -1530,19 +1576,25 @@
 
     clearOutputs();
     generateBtn.disabled = true;
-    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
+    if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = true;
     setGenerating(true);
 
     const activeModel = payload.model;
     const startedAt = Date.now();
     let firstTokenAt = null;
-    setGenerationStatusText("Thinking...");
+    let thinkingScroll = pickThinkingScroll();
+    let nextThinkingScrollAt = Date.now() + 2400;
+    setGenerationStatusText(formatThinkingScroll(thinkingScroll, 0));
     const statusTick = setInterval(function () {
       const secs = Math.floor((Date.now() - startedAt) / 1000);
       if (firstTokenAt === null) {
+        if (Date.now() >= nextThinkingScrollAt) {
+          thinkingScroll = pickThinkingScroll(thinkingScroll);
+          nextThinkingScrollAt = Date.now() + 2400;
+        }
         const loadingMsg =
           warmModels.has(activeModel) || isOpenRouterModel(activeModel)
-            ? "Thinking... " + secs + " s"
+            ? formatThinkingScroll(thinkingScroll, secs)
             : "Loading " + activeModel + " into memory... " + secs + " s";
         setGenerationStatusText(loadingMsg);
       } else {
@@ -1656,7 +1708,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
-      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
+      if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
       if (warmModels.has(activeModel)) {
@@ -1690,7 +1742,7 @@
 
     refineBtn.disabled = true;
     generateBtn.disabled = true;
-    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
+    if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = true;
     if (saveFavoriteBtn) saveFavoriteBtn.hidden = true;
     setGenerating(true);
 
@@ -1755,7 +1807,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
-      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
+      if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = false;
       refineBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!outputPositive.value.trim());
@@ -1767,8 +1819,9 @@
     runGenerate({});
   });
 
-  if (stickyGenerateBtn) {
-    stickyGenerateBtn.addEventListener("click", function () {
+  if (stickyRandomizeGenerateBtn) {
+    stickyRandomizeGenerateBtn.addEventListener("click", function () {
+      randomizeTagDropdowns();
       runGenerate({});
     });
   }
@@ -1954,9 +2007,9 @@
   }
 
   function setModeProgrammatically(mode) {
-    if (!mode || (mode !== "mj" && mode !== "sdxl")) return;
-    if (mode === currentMode) return;
-    currentMode = mode;
+    const normalized = normalizeOutputMode(mode);
+    if (normalized === currentMode) return;
+    currentMode = normalized;
     applyModeUi();
   }
 
@@ -2084,8 +2137,8 @@
 
       const badge = document.createElement("span");
       badge.className = "favorite-mode-badge";
-      badge.dataset.mode = fav.mode === "sdxl" ? "sdxl" : "mj";
-      badge.textContent = fav.mode === "sdxl" ? "SDXL" : "MJ";
+      badge.dataset.mode = normalizeOutputMode(fav.mode);
+      badge.textContent = outputModeLabel(badge.dataset.mode);
       meta.appendChild(badge);
 
       const time = document.createElement("span");
@@ -2167,7 +2220,7 @@
       return {
         name: String(name || "").trim() || "Untitled favorite",
         title: getCurrentGeneratedTitle() || fallbackTitleFromPrompt(cleanedPositive),
-        mode: currentMode === "sdxl" ? "sdxl" : "mj",
+        mode: currentMode,
         positive: cleanedPositive,
         negative: currentMode === "sdxl" ? negativeRaw.trim() : "",
         tags: Array.from(selectedTags),
@@ -2178,8 +2231,9 @@
 
     function loadIntoBuilder(fav) {
       if (!fav) return;
+      const mode = normalizeOutputMode(fav.mode);
 
-      setModeProgrammatically(fav.mode);
+      setModeProgrammatically(mode);
       resetTagSelection();
       applyTagsFromFavorite(fav.tags);
 
@@ -2190,17 +2244,17 @@
       if (outputPositive) {
         const positive = typeof fav.positive === "string" ? fav.positive : "";
         outputPositive.value =
-          fav.mode === "mj" && positive ? appendMjParamFlags(positive) : positive;
+          mode === "mj" && positive ? appendMjParamFlags(positive) : positive;
       }
       if (outputNegative) {
         outputNegative.value =
-          fav.mode === "sdxl" && typeof fav.negative === "string"
+          mode === "sdxl" && typeof fav.negative === "string"
             ? fav.negative
             : "";
       }
       if (outputSettings) {
         outputSettings.value =
-          fav.mode === "sdxl" ? getSdxlGenerationSettingsText() : "";
+          mode === "sdxl" ? getSdxlGenerationSettingsText() : "";
       }
 
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
@@ -2218,7 +2272,7 @@
 
     function useInNewGeneration(fav) {
       if (!fav) return;
-      setModeProgrammatically(fav.mode);
+      setModeProgrammatically(normalizeOutputMode(fav.mode));
       resetTagSelection();
       applyTagsFromFavorite(fav.tags);
       if (freeTextEl) {
@@ -2308,7 +2362,7 @@
             title:
               String(item.title || "").trim() ||
               fallbackTitleFromPrompt(item.positive || ""),
-            mode: item.mode === "sdxl" ? "sdxl" : "mj",
+            mode: normalizeOutputMode(item.mode),
             positive: String(item.positive || "").trim(),
             negative: String(item.negative || "").trim(),
             tags: Array.isArray(item.tags) ? item.tags : [],

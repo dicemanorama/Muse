@@ -20,6 +20,7 @@ from config import (
     CATEGORY_TEMPLATES,
     MJ_SYSTEM_PROMPT,
     MODEL_NAME,
+    OTHER_SYSTEM_PROMPT,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
     OPENROUTER_FALLBACK_MODELS,
@@ -339,7 +340,7 @@ def create_saved_prompt_route():
         return jsonify({"error": "name is required"}), 400
     mode_raw = data.get("mode")
     mode = mode_raw.strip().lower() if isinstance(mode_raw, str) else "mj"
-    if mode not in {"mj", "sdxl"}:
+    if mode not in {"mj", "sdxl", "other"}:
         mode = "mj"
 
     positive_raw = data.get("positive")
@@ -455,6 +456,8 @@ def generate():
         output_mode = "mj"
     if output_mode == "sdxl":
         system_prompt = SDXL_SYSTEM_PROMPT
+    elif output_mode == "other":
+        system_prompt = OTHER_SYSTEM_PROMPT
     else:
         system_prompt = MJ_SYSTEM_PROMPT
 

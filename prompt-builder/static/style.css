@@ -407,6 +407,18 @@ body {
   pointer-events: none;
 }
 
+.aspect-mode-note {
+  margin: 0.75rem 0 0;
+  max-width: 42rem;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.aspect-mode-note[hidden] {
+  display: none;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -746,7 +758,7 @@ body {
 
   .prompt-sticky-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .prompt-sticky-actions .btn {
@@ -754,7 +766,7 @@ body {
   }
 
   .prompt-sticky-actions #sticky-copy-positive-btn {
-    grid-column: 1 / -1;
+    grid-column: 1;
   }
 }
 
@@ -924,9 +936,16 @@ body {
   margin-bottom: 1rem;
 }
 
+.output-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 34rem);
+}
+
 .mode-option,
 .output-mode-option {
-  padding: 0.4rem 1rem;
+  min-width: 0;
+  padding: 0.4rem 0.8rem;
   font-size: 0.8rem;
   cursor: pointer;
   border: none;
@@ -936,6 +955,7 @@ body {
   transition:
     background 0.15s ease,
     color 0.15s ease;
+  text-align: center;
 }
 
 .mode-option.is-active,
