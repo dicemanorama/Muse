@@ -1,6 +1,14 @@
 (function () {
   "use strict";
 
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () {
+        /* PWA support is optional; the app still works without a service worker. */
+      });
+    });
+  }
+
   const selectedTags = new Set();
   const selectedDropdownTags = new Map();
   const selectedTemplatesByCategory = new Map();

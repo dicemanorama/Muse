@@ -6,7 +6,15 @@ import time
 import uuid
 
 import requests
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    stream_with_context,
+)
 
 from config import (
     CATEGORY_TEMPLATES,
@@ -118,6 +126,7 @@ def _normalize_generated_title(raw: str, max_len: int = 120) -> str:
 
 
 app = Flask(__name__)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 TEMPLATES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates.json")
 VALID_TEMPLATE_CATEGORIES = set(TAGS.keys())
@@ -251,6 +260,11 @@ def index():
         tags=TAGS,
         category_templates=_group_templates_by_category(),
     )
+
+
+@app.route("/sw.js")
+def service_worker():
+    return send_from_directory(STATIC_DIR, "sw.js", mimetype="application/javascript")
 
 
 @app.route("/templates", methods=["GET"])

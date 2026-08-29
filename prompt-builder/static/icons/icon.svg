@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title>Muse icon</title>
+<desc>Faceted prism M with cyan and violet wings, a bright central crystal, and a spectrum beam.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#07101d"/>
+    <stop offset="1" stop-color="#080617"/>
+  </linearGradient>
+  <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#55f7ef"/>
+    <stop offset=".48" stop-color="#16b8d4"/>
+    <stop offset="1" stop-color="#0874ba"/>
+  </linearGradient>
+  <linearGradient id="right" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#9d70ff"/>
+    <stop offset=".5" stop-color="#6a35e8"/>
+    <stop offset="1" stop-color="#d73ad9"/>
+  </linearGradient>
+  <linearGradient id="spectrum" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#6c4cff"/>
+    <stop offset=".22" stop-color="#00cfff"/>
+    <stop offset=".42" stop-color="#2ee8a3"/>
+    <stop offset=".6" stop-color="#f2e744"/>
+    <stop offset=".78" stop-color="#ff8a25"/>
+    <stop offset="1" stop-color="#ed2b93"/>
+  </linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="7" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+
+<rect width="512" height="512" rx="104" fill="url(#bg)"/>
+
+<!-- incoming light -->
+<path d="M0 278 L207 247" stroke="#dffcff" stroke-width="3" opacity=".9" filter="url(#glow)"/>
+
+<!-- spectrum -->
+<path d="M306 247 L512 188 L512 306 Z" fill="url(#spectrum)" opacity=".12"/>
+<g stroke="url(#spectrum)" stroke-width="4" opacity=".85" filter="url(#glow)">
+  <path d="M306 247 L512 202"/>
+  <path d="M306 247 L512 222"/>
+  <path d="M306 247 L512 243"/>
+  <path d="M306 247 L512 263"/>
+  <path d="M306 247 L512 285"/>
+</g>
+
+<!-- left M wing -->
+<path d="M104 104 L256 238 L207 286 L104 408 Z" fill="url(#left)" opacity=".95"/>
+<path d="M104 104 L207 247 L104 247 Z" fill="#48eee8" opacity=".35"/>
+<path d="M104 247 L207 247 L207 286 L104 408 Z" fill="#007fae" opacity=".45"/>
+<path d="M104 104 L207 247 L207 286 Z" fill="#20c9de" opacity=".42"/>
+<path d="M104 104 L256 238" stroke="#9dffff" stroke-width="2" opacity=".8"/>
+<path d="M104 104 L104 408 L207 286 L207 247" fill="none" stroke="#39e9ef" stroke-width="2"/>
+
+<!-- right M wing -->
+<path d="M408 104 L256 238 L306 286 L408 408 Z" fill="url(#right)" opacity=".96"/>
+<path d="M408 104 L306 247 L408 247 Z" fill="#a55cff" opacity=".4"/>
+<path d="M408 247 L306 247 L306 286 L408 408 Z" fill="#6e20d9" opacity=".42"/>
+<path d="M408 104 L256 238 L306 286 Z" fill="#a846ef" opacity=".4"/>
+<path d="M408 104 L256 238" stroke="#d7b2ff" stroke-width="2" opacity=".85"/>
+<path d="M408 104 L408 408 L306 286 L306 247" fill="none" stroke="#c957ff" stroke-width="2"/>
+
+<!-- central prism -->
+<path d="M256 238 L306 286 L256 345 L207 286 Z" fill="#f7fbff" filter="url(#glow)"/>
+<path d="M256 238 L256 345 L207 286 Z" fill="#c9f7ff"/>
+<path d="M256 238 L306 286 L256 286 Z" fill="#ffffff"/>
+<path d="M256 286 L306 286 L256 345 Z" fill="#d9d2ff"/>
+<path d="M207 286 L256 286 L256 345 Z" fill="#e9fbff"/>
+<path d="M207 286 L306 286" stroke="#fff" stroke-width="2" opacity=".85"/>
+</svg>
