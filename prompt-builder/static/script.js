@@ -37,9 +37,7 @@
   const copyNegativeBtn = document.getElementById("copy-negative-btn");
   const stickyCopyPositiveBtn = document.getElementById("sticky-copy-positive-btn");
   const stickyPromptTitleEl = document.getElementById("sticky-prompt-title");
-  const stickyRandomizeGenerateBtn = document.getElementById(
-    "sticky-randomize-generate-btn"
-  );
+  const stickyGenerateBtn = document.getElementById("sticky-generate-btn");
   const clearBtn = document.getElementById("clear-btn");
   const aspectDisplay = document.getElementById("aspect-display");
   const aspectOtherNote = document.getElementById("aspect-other-note");
@@ -1576,7 +1574,7 @@
 
     clearOutputs();
     generateBtn.disabled = true;
-    if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = true;
+    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
     setGenerating(true);
 
     const activeModel = payload.model;
@@ -1708,7 +1706,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
-      if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = false;
+      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
       if (warmModels.has(activeModel)) {
@@ -1742,7 +1740,7 @@
 
     refineBtn.disabled = true;
     generateBtn.disabled = true;
-    if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = true;
+    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
     if (saveFavoriteBtn) saveFavoriteBtn.hidden = true;
     setGenerating(true);
 
@@ -1807,7 +1805,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
-      if (stickyRandomizeGenerateBtn) stickyRandomizeGenerateBtn.disabled = false;
+      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
       refineBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!outputPositive.value.trim());
@@ -1819,9 +1817,8 @@
     runGenerate({});
   });
 
-  if (stickyRandomizeGenerateBtn) {
-    stickyRandomizeGenerateBtn.addEventListener("click", function () {
-      randomizeTagDropdowns();
+  if (stickyGenerateBtn) {
+    stickyGenerateBtn.addEventListener("click", function () {
       runGenerate({});
     });
   }
