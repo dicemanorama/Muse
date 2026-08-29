@@ -36,6 +36,7 @@
   const copyNegativeBtn = document.getElementById("copy-negative-btn");
   const stickyCopyPositiveBtn = document.getElementById("sticky-copy-positive-btn");
   const stickyPromptTitleEl = document.getElementById("sticky-prompt-title");
+  const stickyGenerateBtn = document.getElementById("sticky-generate-btn");
   const clearBtn = document.getElementById("clear-btn");
   const aspectDisplay = document.getElementById("aspect-display");
   const aspectRadios = document.querySelectorAll('input[name="aspect_ratio"]');
@@ -1234,7 +1235,7 @@
     const checked = document.querySelector(
       'input[name="aspect_ratio"]:checked'
     );
-    return checked ? checked.value : "1:1";
+    return checked ? checked.value : "4:5";
   }
 
   function appendMjParamFlags(streamedText) {
@@ -1529,6 +1530,7 @@
 
     clearOutputs();
     generateBtn.disabled = true;
+    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
     setGenerating(true);
 
     const activeModel = payload.model;
@@ -1654,6 +1656,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
+      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!(outputPositive && outputPositive.value.trim()));
       if (warmModels.has(activeModel)) {
@@ -1687,6 +1690,7 @@
 
     refineBtn.disabled = true;
     generateBtn.disabled = true;
+    if (stickyGenerateBtn) stickyGenerateBtn.disabled = true;
     if (saveFavoriteBtn) saveFavoriteBtn.hidden = true;
     setGenerating(true);
 
@@ -1751,6 +1755,7 @@
     } finally {
       clearInterval(statusTick);
       generateBtn.disabled = false;
+      if (stickyGenerateBtn) stickyGenerateBtn.disabled = false;
       refineBtn.disabled = false;
       setGenerating(false);
       setOutputHasContent(!!outputPositive.value.trim());
@@ -1761,6 +1766,12 @@
   generateBtn.addEventListener("click", function () {
     runGenerate({});
   });
+
+  if (stickyGenerateBtn) {
+    stickyGenerateBtn.addEventListener("click", function () {
+      runGenerate({});
+    });
+  }
 
   if (refineBtn) {
     refineBtn.addEventListener("click", function () {
@@ -1856,7 +1867,7 @@
     if (freeTextEl) freeTextEl.value = "";
     clearOutputs();
     const defaultAspect = document.querySelector(
-      'input[name="aspect_ratio"][value="1:1"]'
+      'input[name="aspect_ratio"][value="4:5"]'
     );
     if (defaultAspect) {
       defaultAspect.checked = true;

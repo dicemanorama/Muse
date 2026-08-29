@@ -9,10 +9,10 @@
     <meta name="apple-mobile-web-app-title" content="Muse" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Image Prompt Builder</title>
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='2') }}" />
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='2') }}" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='2') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2') }}" />
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='3') }}" />
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='3') }}" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='3') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='3') }}" />
   </head>
   <body>
     <div class="page">
@@ -78,8 +78,9 @@
               <div class="param-row">
                 <label class="param-label" for="mj-version">Version</label>
                 <select id="mj-version" class="param-select">
+                  <option value="" selected>Latest</option>
                   <option value="--v 8">--v 8</option>
-                  <option value="--v 7" selected>--v 7 (default)</option>
+                  <option value="--v 7">--v 7</option>
                 </select>
               </div>
               <div class="param-row">
@@ -188,7 +189,7 @@
             <legend class="field-label">Reference only</legend>
             <div class="aspect-options" id="aspect-ratio-group">
               <label class="aspect-option">
-                <input type="radio" name="aspect_ratio" value="1:1" checked />
+                <input type="radio" name="aspect_ratio" value="1:1" />
                 <span>1:1</span>
               </label>
               <label class="aspect-option">
@@ -204,7 +205,7 @@
                 <span>9:16</span>
               </label>
               <label class="aspect-option">
-                <input type="radio" name="aspect_ratio" value="4:5" />
+                <input type="radio" name="aspect_ratio" value="4:5" checked />
                 <span>4:5</span>
               </label>
             </div>
@@ -477,9 +478,17 @@
         <span class="prompt-sticky-kicker">Current prompt</span>
         <span id="sticky-prompt-title" class="prompt-sticky-title">No prompt yet</span>
       </div>
-      <button type="button" class="btn btn-primary" id="sticky-copy-positive-btn" disabled>
-        Copy Prompt
-      </button>
+      <div class="prompt-sticky-actions">
+        <button type="button" class="btn tags-randomize-btn" id="sticky-randomize-btn">
+          Randomize
+        </button>
+        <button type="button" class="btn btn-primary" id="sticky-generate-btn">
+          Generate
+        </button>
+        <button type="button" class="btn btn-primary" id="sticky-copy-positive-btn" disabled>
+          Copy Prompt
+        </button>
+      </div>
     </div>
 
     <div id="favorite-save-modal" class="modal" hidden>
@@ -561,6 +570,6 @@
     <script>
       window.CATEGORY_TEMPLATES = {{ category_templates | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='2') }}" defer></script>
+    <script src="{{ url_for('static', filename='script.js', v='3') }}" defer></script>
   </body>
 </html>
