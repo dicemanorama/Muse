@@ -28,10 +28,10 @@
       content="Mix subjects, moods, styles, and visual ingredients into a production-ready image prompt."
     />
     <meta name="twitter:image" content="{{ url_for('static', filename='graphics/socials_preview.png', _external=True) }}" />
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='18') }}" />
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='18') }}" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='18') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='18') }}" />
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='19') }}" />
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='19') }}" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='19') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='19') }}" />
   </head>
   <body>
     <div class="page">
@@ -47,6 +47,11 @@
           <p class="site-subtitle">
             Mix subjects, moods, styles, and visual ingredients into a production-ready prompt.
           </p>
+        </div>
+        <div class="site-header-actions">
+          <button type="button" class="btn btn-tip" id="tip-aaron-btn">
+            Tip Aaron
+          </button>
         </div>
       </header>
 
@@ -518,6 +523,48 @@
       </div>
     </div>
 
+    <div id="tip-modal" class="modal" hidden>
+      <div
+        class="modal-card tip-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tip-modal-title"
+      >
+        <h3 id="tip-modal-title" class="panel-title">Tip Aaron</h3>
+        <p class="tip-modal-copy">
+          Support the builder and keep Muse humming.
+        </p>
+        <div class="tip-options">
+          <a
+            class="tip-option"
+            href="https://x.com/dicemanorama"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="tip-option-title">X Money</span>
+            <span class="tip-option-detail">@dicemanorama on X</span>
+          </a>
+          <a
+            class="tip-option"
+            href="https://cash.app/$dicemanorama"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="tip-option-title">CashAPP</span>
+            <span class="tip-option-detail">$dicemanorama</span>
+          </a>
+        </div>
+        <div class="modal-actions">
+          <div></div>
+          <div class="modal-actions-right">
+            <button type="button" class="btn" id="tip-modal-close-btn">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="favorite-save-modal" class="modal" hidden>
       <div
         class="modal-card"
@@ -597,6 +644,6 @@
     <script>
       window.CATEGORY_TEMPLATES = {{ category_templates | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='18') }}" defer></script>
+    <script src="{{ url_for('static', filename='script.js', v='19') }}" defer></script>
   </body>
 </html>

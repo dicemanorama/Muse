@@ -27,6 +27,35 @@
     "mistralai/mistral-7b-instruct",
   ]);
 
+  (function TipModal() {
+    const openBtn = document.getElementById("tip-aaron-btn");
+    const modal = document.getElementById("tip-modal");
+    const closeBtn = document.getElementById("tip-modal-close-btn");
+    if (!openBtn || !modal || !closeBtn) return;
+
+    function openModal() {
+      modal.hidden = false;
+      closeBtn.focus();
+    }
+
+    function closeModal(shouldRestoreFocus) {
+      modal.hidden = true;
+      if (shouldRestoreFocus) openBtn.focus();
+    }
+
+    openBtn.addEventListener("click", openModal);
+    closeBtn.addEventListener("click", function () {
+      closeModal(true);
+    });
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeModal(true);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || modal.hidden) return;
+      closeModal(true);
+    });
+  })();
+
   let currentMode = "mj";
   let outputTitleGenerationSeq = 0;
 

@@ -55,7 +55,7 @@ body {
 
 .site-header {
   display: grid;
-  grid-template-columns: minmax(5.5rem, 8rem) 1fr;
+  grid-template-columns: minmax(5.5rem, 8rem) 1fr auto;
   gap: 1rem;
   align-items: center;
   margin-bottom: 1.4rem;
@@ -101,6 +101,26 @@ body {
   font-size: 0.95rem;
   color: var(--text-muted);
   max-width: 42em;
+}
+
+.site-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-self: start;
+  padding-top: 0.2rem;
+}
+
+.btn-tip {
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(72, 245, 238, 0.18), rgba(216, 78, 159, 0.28));
+  border-color: rgba(72, 245, 238, 0.36);
+  box-shadow: 0 0 24px rgba(72, 245, 238, 0.14);
+  white-space: nowrap;
+}
+
+.btn-tip:hover:not(:disabled) {
+  border-color: rgba(72, 245, 238, 0.58);
+  box-shadow: 0 0 28px rgba(216, 78, 159, 0.2);
 }
 
 .main {
@@ -695,6 +715,16 @@ body {
     padding-top: 0.35rem;
   }
 
+  .site-header-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+    padding-top: 0;
+  }
+
+  .site-header-actions .btn {
+    width: 100%;
+  }
+
   .site-logo {
     border-radius: 18px;
   }
@@ -1116,6 +1146,56 @@ label[for="output-negative"],
 
 .modal-card .field-label {
   margin-bottom: 0.25rem;
+}
+
+.tip-modal-card {
+  gap: 0.75rem;
+}
+
+.tip-modal-copy {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.tip-options {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.tip-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem;
+  color: var(--text);
+  text-decoration: none;
+  background: rgba(5, 9, 20, 0.34);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.tip-option:hover,
+.tip-option:focus-visible {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(72, 245, 238, 0.14), rgba(216, 78, 159, 0.18));
+  border-color: rgba(72, 245, 238, 0.52);
+  box-shadow: 0 0 24px rgba(72, 245, 238, 0.12);
+  outline: none;
+}
+
+.tip-option-title {
+  font-weight: 800;
+}
+
+.tip-option-detail {
+  color: var(--text-muted);
+  font-size: 0.86rem;
 }
 
 .modal-card input,
