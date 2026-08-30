@@ -2012,7 +2012,8 @@
 
   (function FavoritesManager() {
     const STORAGE_KEY = "promptFavorites";
-    const MIGRATED_KEY = "promptFavoritesMigrated";
+    const FAVORITES_DB_NAME = "musePromptBuilder";
+    const FAVORITES_STORE_NAME = "favorites";
     const listEl = document.getElementById("favorites-list");
     const emptyEl = document.getElementById("favorites-empty");
     const modal = document.getElementById("favorite-save-modal");
@@ -2027,12 +2028,16 @@
 
     function sanitizeFavorites(items) {
       if (!Array.isArray(items)) return [];
-      return items.filter(function (f) {
-        return f && typeof f === "object" && typeof f.id === "string";
-      });
+      return items
+        .filter(function (f) {
+          return f && typeof f === "object" && typeof f.id === "string";
+        })
+        .map(function (f) {
+          return Object.assign({}, f, { mode: normalizeOutputMode(f.mode) });
+        });
     }
 
-    function loadLegacyLocalFavorites() {
+    function loadLocalStorageFavorites() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
@@ -2043,33 +2048,119 @@
       }
     }
 
-    function markLegacyMigrated() {
+    function saveLocalStorageFavorites(items) {
       try {
-        localStorage.setItem(MIGRATED_KEY, "1");
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeFavorites(items)));
       } catch {}
     }
 
-    function hasLegacyMigrationMarker() {
+    function createFavoriteId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return "fav-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    }
+
+    function openFavoritesDb() {
+      if (!("indexedDB" in window)) return Promise.resolve(null);
+      return new Promise(function (resolve) {
+        const req = indexedDB.open(FAVORITES_DB_NAME, 1);
+        req.onupgradeneeded = function () {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(FAVORITES_STORE_NAME)) {
+            db.createObjectStore(FAVORITES_STORE_NAME, { keyPath: "id" });
+          }
+        };
+        req.onsuccess = function () {
+          resolve(req.result);
+        };
+        req.onerror = function () {
+          resolve(null);
+        };
+        req.onblocked = function () {
+          resolve(null);
+        };
+      });
+    }
+
+    function getIndexedDbFavorites(db) {
+      return new Promise(function (resolve) {
+        if (!db) {
+          resolve([]);
+          return;
+        }
+        const tx = db.transaction(FAVORITES_STORE_NAME, "readonly");
+        const req = tx.objectStore(FAVORITES_STORE_NAME).getAll();
+        req.onsuccess = function () {
+          resolve(sanitizeFavorites(req.result));
+        };
+        req.onerror = function () {
+          resolve([]);
+        };
+      });
+    }
+
+    function replaceIndexedDbFavorites(db, items) {
+      return new Promise(function (resolve) {
+        if (!db) {
+          resolve(false);
+          return;
+        }
+        const tx = db.transaction(FAVORITES_STORE_NAME, "readwrite");
+        const store = tx.objectStore(FAVORITES_STORE_NAME);
+        store.clear();
+        sanitizeFavorites(items).forEach(function (item) {
+          store.put(item);
+        });
+        tx.oncomplete = function () {
+          resolve(true);
+        };
+        tx.onerror = function () {
+          resolve(false);
+        };
+        tx.onabort = function () {
+          resolve(false);
+        };
+      });
+    }
+
+    async function requestDurableStorage() {
       try {
-        return localStorage.getItem(MIGRATED_KEY) === "1";
-      } catch {
-        return false;
+        if (navigator.storage && typeof navigator.storage.persist === "function") {
+          await navigator.storage.persist();
+        }
+      } catch {}
+    }
+
+    async function loadLocalFavorites() {
+      const localFallback = loadLocalStorageFavorites();
+      const db = await openFavoritesDb();
+      const indexedFavorites = await getIndexedDbFavorites(db);
+      if (indexedFavorites.length) {
+        saveLocalStorageFavorites(indexedFavorites);
+        if (db) db.close();
+        return indexedFavorites;
+      }
+      if (localFallback.length) {
+        await replaceIndexedDbFavorites(db, localFallback);
+      }
+      if (db) db.close();
+      return localFallback;
+    }
+
+    async function saveLocalFavorites(items) {
+      const clean = sanitizeFavorites(items);
+      saveLocalStorageFavorites(clean);
+      const db = await openFavoritesDb();
+      try {
+        await replaceIndexedDbFavorites(db, clean);
+      } finally {
+        if (db) db.close();
       }
     }
 
     async function fetchFavorites() {
-      try {
-        const resp = await fetch("/saved-prompts");
-        if (!resp.ok) {
-          favorites = [];
-          return;
-        }
-        const data = await resp.json();
-        favorites = sanitizeFavorites(data);
-      } catch {
-        favorites = [];
-      }
+      favorites = await loadLocalFavorites();
     }
 
     function formatRelative(ts) {
@@ -2194,16 +2285,12 @@
 
     function deleteById(id) {
       (async function () {
-        try {
-          await fetch("/saved-prompts/" + encodeURIComponent(id), {
-            method: "DELETE",
-          });
-        } catch {
-          /* noop */
-        } finally {
-          await fetchFavorites();
-          render();
-        }
+        favorites = favorites.filter(function (fav) {
+          return fav.id !== id;
+        });
+        await saveLocalFavorites(favorites);
+        await fetchFavorites();
+        render();
       })();
     }
 
@@ -2215,6 +2302,7 @@
           ? stripMjWeights(stripMjFlags(positiveRaw))
           : positiveRaw.trim();
       return {
+        id: createFavoriteId(),
         name: String(name || "").trim() || "Untitled favorite",
         title: getCurrentGeneratedTitle() || fallbackTitleFromPrompt(cleanedPositive),
         mode: currentMode,
@@ -2325,61 +2413,12 @@
         return;
       }
       const entry = snapshotCurrent(name);
-      try {
-        const resp = await fetch("/saved-prompts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(entry),
-        });
-        if (!resp.ok) return;
-      } catch {
-        return;
-      }
+      favorites = sanitizeFavorites(favorites.concat(entry));
+      await saveLocalFavorites(favorites);
       await fetchFavorites();
       render();
       closeModal();
       })();
-    }
-
-    async function migrateLegacyFavoritesIfNeeded() {
-      if (hasLegacyMigrationMarker()) return;
-      const legacy = loadLegacyLocalFavorites();
-      if (!legacy.length) {
-        markLegacyMigrated();
-        return;
-      }
-      if (favorites.length > 0) {
-        markLegacyMigrated();
-        return;
-      }
-      for (const item of legacy) {
-        try {
-          const payload = {
-            name: String(item.name || "").trim() || "Untitled favorite",
-            title:
-              String(item.title || "").trim() ||
-              fallbackTitleFromPrompt(item.positive || ""),
-            mode: normalizeOutputMode(item.mode),
-            positive: String(item.positive || "").trim(),
-            negative: String(item.negative || "").trim(),
-            tags: Array.isArray(item.tags) ? item.tags : [],
-            freeText: typeof item.freeText === "string" ? item.freeText : "",
-            createdAt:
-              typeof item.createdAt === "number" && item.createdAt > 0
-                ? item.createdAt
-                : Date.now(),
-          };
-          if (!payload.positive) continue;
-          await fetch("/saved-prompts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-        } catch {
-          /* noop */
-        }
-      }
-      markLegacyMigrated();
     }
 
     if (saveFavoriteBtn) {
@@ -2407,8 +2446,7 @@
     });
 
     (async function initializeFavorites() {
-      await fetchFavorites();
-      await migrateLegacyFavoritesIfNeeded();
+      await requestDurableStorage();
       await fetchFavorites();
       render();
     })();
