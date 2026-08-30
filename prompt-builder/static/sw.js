@@ -1,4 +1,4 @@
-const CACHE_NAME = "muse-prompt-builder-v11";
+const CACHE_NAME = "muse-prompt-builder-v14";
 const APP_SHELL = [
   "/",
   "/static/style.css",

@@ -1032,6 +1032,22 @@ body {
   padding: 0.45rem 0.55rem;
 }
 
+.param-select {
+  color-scheme: dark;
+  background-color: rgba(7, 13, 28, 0.86);
+}
+
+.param-select option,
+.param-select optgroup {
+  color: var(--text);
+  background-color: #101827;
+}
+
+.param-select option:checked {
+  color: #06101d;
+  background-color: var(--accent);
+}
+
 .param-select:focus-visible,
 .param-input:focus-visible {
   outline: 2px solid var(--indigo);

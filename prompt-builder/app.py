@@ -43,6 +43,31 @@ def _is_openrouter_model(name: str) -> bool:
     return isinstance(name, str) and bool(name.strip())
 
 
+OPENROUTER_USAGE_LIMIT_MESSAGE = (
+    "Muse has reached its daily OpenRouter usage limit. Please check back after "
+    "OpenRouter's usual reset time at midnight UTC. If you notice this happening "
+    "often, or you need a temporary rate limit increase, drop Alex a note at "
+    "@dicemanorama on X."
+)
+
+
+def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
+    lowered = (body or "").lower()
+    return status_code in {403, 429} and any(
+        marker in lowered
+        for marker in (
+            "budget",
+            "rate limit",
+            "rate_limit",
+            "spending limit",
+            "usage limit",
+            "free-models-per-day",
+            "limit exceeded",
+            "too many requests",
+        )
+    )
+
+
 def _openrouter_chat_stream(model: str, system: str, user: str):
     if not OPENROUTER_API_KEY:
         yield "[OpenRouter error: OPENROUTER_API_KEY not set in .env]"
@@ -69,6 +94,9 @@ def _openrouter_chat_stream(model: str, system: str, user: str):
         ) as resp:
             if resp.status_code != 200:
                 body = resp.text
+                if _is_openrouter_usage_limit(resp.status_code, body):
+                    yield "[Muse usage limit: " + OPENROUTER_USAGE_LIMIT_MESSAGE + "]"
+                    return
                 yield f"\n[OpenRouter error {resp.status_code}: {body}]"
                 return
             for raw_line in resp.iter_lines(decode_unicode=True):

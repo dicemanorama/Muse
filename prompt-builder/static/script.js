@@ -93,6 +93,8 @@
   );
   const platformSettings = document.getElementById("platform-settings");
   const DEFAULT_MODEL = "google/gemma-3-12b-it";
+  const USAGE_LIMIT_MESSAGE =
+    "Muse has reached its daily OpenRouter usage limit. Please check back after OpenRouter's usual reset time at midnight UTC. If you notice this happening often, or you need a temporary rate limit increase, drop Alex a note at @dicemanorama on X.";
   const THINKING_SCROLLS = [
     "Arranging the visual ingredients",
     "Shuffling the mood board",
@@ -479,6 +481,25 @@
     if (/^\[Refine failed:/i.test(s)) return true;
     if (/^\[Refine error:/i.test(s)) return true;
     return false;
+  }
+
+  function isUsageLimitText(text) {
+    const s = String(text || "").toLowerCase();
+    return (
+      s.includes("[muse usage limit:") ||
+      (s.includes("openrouter") &&
+        (s.includes("budget") ||
+          s.includes("rate limit") ||
+          s.includes("spending limit") ||
+          s.includes("usage limit") ||
+          s.includes("free-models-per-day") ||
+          s.includes("limit exceeded") ||
+          s.includes("too many requests")))
+    );
+  }
+
+  function formatUsageLimitOutput() {
+    return USAGE_LIMIT_MESSAGE;
   }
 
   function fallbackTitleFromPrompt(positiveForTitle) {
@@ -1753,14 +1774,18 @@
         }
         if (outputPositive) {
           outputPositive.value =
-            "[Request failed: " + response.status + "] " + (errText || "");
+            response.status === 429 || isUsageLimitText(errText)
+              ? formatUsageLimitOutput()
+              : "[Request failed: " + response.status + "] " + (errText || "");
         }
         return;
       }
 
       if (!response.body) {
         const full = await response.text();
-        if (currentMode === "mj") {
+        if (isUsageLimitText(full)) {
+          if (outputPositive) outputPositive.value = formatUsageLimitOutput();
+        } else if (currentMode === "mj") {
           if (outputPositive) outputPositive.value = appendMjParamFlags(full);
         } else if (currentMode === "sdxl") {
           const parsed = parseSdxlOutput(full);
@@ -1798,6 +1823,11 @@
           outputPositive.value = accumulated;
           outputPositive.scrollTop = outputPositive.scrollHeight;
         }
+      }
+
+      if (isUsageLimitText(accumulated)) {
+        if (outputPositive) outputPositive.value = formatUsageLimitOutput();
+        return;
       }
 
       if (currentMode === "mj") {
@@ -1888,7 +1918,9 @@
       if (!response.ok) {
         const errText = await response.text();
         outputPositive.value =
-          "[Refine failed: " + response.status + "] " + (errText || "");
+          response.status === 429 || isUsageLimitText(errText)
+            ? formatUsageLimitOutput()
+            : "[Refine failed: " + response.status + "] " + (errText || "");
         return;
       }
 
@@ -1914,7 +1946,9 @@
       }
 
       const refined = accumulated.trim();
-      if (currentMode === "mj") {
+      if (isUsageLimitText(refined)) {
+        outputPositive.value = formatUsageLimitOutput();
+      } else if (currentMode === "mj") {
         outputPositive.value = appendMjParamFlags(refined);
       } else {
         outputPositive.value = refined;
