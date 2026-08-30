@@ -42,7 +42,6 @@ OPENROUTER_FALLBACK_MODELS = [
                 "qwen/qwen3.8-flash",
                 "z-ai/glm-5.3-flash",
                 "meta/muse-spark-1.2-contributor",
-                "deepseek/deepseek-v4-flash-vision-exp",
                 "meta-llama/llama-3.1-8b-instruct",
                 "mistralai/mistral-7b-instruct",
                 "qwen/qwen-2.5-72b-instruct",

@@ -49,6 +49,7 @@ OPENROUTER_USAGE_LIMIT_MESSAGE = (
     "often, or you need a temporary rate limit increase, drop Alex a note at "
     "@dicemanorama on X."
 )
+BLOCKED_OPENROUTER_MODELS = {"deepseek/deepseek-v4-flash-vision-exp"}
 
 
 def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
@@ -165,7 +166,7 @@ def _openrouter_model_entries() -> list[dict]:
 
     def add_entry(model_id: str, label: str | None = None) -> None:
         model = model_id.strip()
-        if not model or model in seen:
+        if not model or model in seen or model in BLOCKED_OPENROUTER_MODELS:
             return
         seen.add(model)
         entries.append(
