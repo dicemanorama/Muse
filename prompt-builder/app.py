@@ -52,6 +52,7 @@ OPENROUTER_USAGE_LIMIT_MESSAGE = (
 BLOCKED_OPENROUTER_MODELS = {
     "deepseek/deepseek-v4-flash-vision-exp",
     "meta/muse-spark-1.2-contributor",
+    "mistralai/mistral-7b-instruct",
 }
 
 

@@ -24,6 +24,7 @@
   const BLOCKED_MODEL_IDS = new Set([
     "deepseek/deepseek-v4-flash-vision-exp",
     "meta/muse-spark-1.2-contributor",
+    "mistralai/mistral-7b-instruct",
   ]);
 
   let currentMode = "mj";
