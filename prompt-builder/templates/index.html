@@ -9,6 +9,25 @@
     <meta name="apple-mobile-web-app-title" content="Muse" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Image Prompt Builder</title>
+    <meta
+      name="description"
+      content="Muse helps you mix subjects, moods, styles, and visual ingredients into a production-ready image prompt."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Muse Prompt Builder" />
+    <meta
+      property="og:description"
+      content="Mix subjects, moods, styles, and visual ingredients into a production-ready image prompt."
+    />
+    <meta property="og:image" content="{{ url_for('static', filename='graphics/socials_preview.png', _external=True) }}" />
+    <meta property="og:image:alt" content="Muse Prompt Builder" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Muse Prompt Builder" />
+    <meta
+      name="twitter:description"
+      content="Mix subjects, moods, styles, and visual ingredients into a production-ready image prompt."
+    />
+    <meta name="twitter:image" content="{{ url_for('static', filename='graphics/socials_preview.png', _external=True) }}" />
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='17') }}" />
     <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg', v='17') }}" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png', v='17') }}" />
