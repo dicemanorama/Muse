@@ -21,6 +21,10 @@
   const FAVORITES_STORE_NAME = "favorites";
   const TEMPLATES_STORE_NAME = "templates";
   const TEMPLATE_STORAGE_KEY = "promptTemplates";
+  const BLOCKED_MODEL_IDS = new Set([
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "meta/muse-spark-1.2-contributor",
+  ]);
 
   let currentMode = "mj";
   let outputTitleGenerationSeq = 0;
@@ -1527,7 +1531,7 @@
             disabled: m.disabled === true,
           };
         }
-        if (!name) return;
+        if (!name || BLOCKED_MODEL_IDS.has(name)) return;
         if (meta) modelMeta.set(name, meta);
         names.push(name);
       });

@@ -1,4 +1,4 @@
-const CACHE_NAME = "muse-prompt-builder-v14";
+const CACHE_NAME = "muse-prompt-builder-v16";
 const APP_SHELL = [
   "/",
   "/static/style.css",
@@ -39,6 +39,14 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (
+    url.pathname === "/models" ||
+    url.pathname === "/templates" ||
+    url.pathname.startsWith("/saved-prompts")
+  ) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(

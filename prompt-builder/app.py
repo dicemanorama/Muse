@@ -49,7 +49,10 @@ OPENROUTER_USAGE_LIMIT_MESSAGE = (
     "often, or you need a temporary rate limit increase, drop Alex a note at "
     "@dicemanorama on X."
 )
-BLOCKED_OPENROUTER_MODELS = {"deepseek/deepseek-v4-flash-vision-exp"}
+BLOCKED_OPENROUTER_MODELS = {
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "meta/muse-spark-1.2-contributor",
+}
 
 
 def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
