@@ -312,6 +312,23 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 TEMPLATES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates.json")
 VALID_TEMPLATE_CATEGORIES = set(TAGS.keys())
+PROMPT_CATEGORY_ORDER = (
+    "Subject",
+    "Action",
+    "Style",
+    "Location",
+    "Lighting",
+    "Color",
+    "Mood",
+    "Camera",
+    "Detail",
+)
+
+
+def _ordered_prompt_categories() -> list[str]:
+    ordered = [category for category in PROMPT_CATEGORY_ORDER if category in TAGS]
+    ordered.extend(category for category in TAGS.keys() if category not in ordered)
+    return ordered
 init_db(STORAGE_DB_PATH, TEMPLATES_PATH, VALID_TEMPLATE_CATEGORIES)
 
 
@@ -394,12 +411,14 @@ def build_user_prompt(
     tags: list[str],
     free_text: str,
     selected_by_category: dict | None = None,
+    output_mode: str = "mj",
 ) -> str:
     parts: list[str] = []
+    has_category_parts = False
 
     if isinstance(selected_by_category, dict) and selected_by_category:
         category_parts: list[str] = []
-        for category in TAGS.keys():
+        for category in _ordered_prompt_categories():
             raw_entry = selected_by_category.get(category)
             if not isinstance(raw_entry, dict):
                 continue
@@ -408,22 +427,33 @@ def build_user_prompt(
                 category_parts.append(f"{category}: {', '.join(merged_items)}")
         if category_parts:
             parts.append("Selected tags by category:\n- " + "\n- ".join(category_parts))
+            has_category_parts = True
 
-    if tags:
+    if tags and not has_category_parts:
         parts.append("Selected tags: " + ", ".join(tags))
 
     if free_text and free_text.strip():
         parts.append("Additional user notes and details: " + free_text.strip())
 
     if not parts:
-        return "Create a beautiful, highly detailed, and atmospheric image generation prompt."
+        return "Create a clear, evocative image generation prompt."
+
+    mode = output_mode.strip().lower() if isinstance(output_mode, str) else "mj"
+    if mode == "mj":
+        parts.append(
+            "Midjourney assembly guidance: write concise descriptive prose, not a flat keyword list. "
+            "Use available categories in this priority order: subject and action first; then medium/style; "
+            "location or environment; lighting; color; mood; camera/composition; final detail or finish. "
+            "Preserve important user notes, remove duplicates, and do not include category labels, explanations, "
+            "or Midjourney parameters."
+        )
 
     context = "\n\n".join(parts)
 
     return (
         f"Create an outstanding, nuanced, and visually rich image prompt based on the following information:\n\n"
         f"{context}\n\n"
-        "Make the prompt as cinematic, evocative, and professionally crafted as possible."
+        "Make the prompt clear, evocative, and professionally crafted."
     )
 
 
@@ -610,6 +640,7 @@ def generate():
         tags,
         free_text,
         selected_by_category=selected_by_category,
+        output_mode=output_mode,
     )
 
     ip, error_response = _check_rate_limit(include_stream_slot=True)

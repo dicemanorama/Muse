@@ -44,6 +44,7 @@ def test_generate_normal_image_request_still_streams(monkeypatch):
     def fake_stream(model_name, system, user):
         assert model_name == model
         assert "glass astronaut" in user
+        assert "Midjourney assembly guidance" in user
         yield "A glass astronaut in moonlight"
 
     monkeypatch.setattr(app_module, "_llm_stream", fake_stream)
@@ -54,6 +55,27 @@ def test_generate_normal_image_request_still_streams(monkeypatch):
 
     assert resp.status_code == 200
     assert b"glass astronaut" in resp.data
+
+
+def test_build_user_prompt_orders_midjourney_categories_without_flat_duplicate():
+    prompt = app_module.build_user_prompt(
+        ["misty citadel", "climbing", "watercolor"],
+        "Keep the scene hopeful.",
+        selected_by_category={
+            "Style": {"all_tags": ["watercolor"]},
+            "Subject": {"all_tags": ["misty citadel"]},
+            "Action": {"all_tags": ["climbing"]},
+        },
+        output_mode="mj",
+    )
+
+    subject_index = prompt.index("Subject: misty citadel")
+    action_index = prompt.index("Action: climbing")
+    style_index = prompt.index("Style: watercolor")
+
+    assert subject_index < action_index < style_index
+    assert "Selected tags: misty citadel, climbing, watercolor" not in prompt
+    assert "subject and action first" in prompt
 
 
 def test_invalid_json_is_rejected(monkeypatch):
