@@ -16,6 +16,11 @@
   const selectedTemplateTagsByCategory = new Map();
   const templateCatalogByCategory = new Map();
   const VALID_OUTPUT_MODES = new Set(["mj", "sdxl", "other"]);
+  const LOCAL_DB_NAME = "musePromptBuilder";
+  const LOCAL_DB_VERSION = 2;
+  const FAVORITES_STORE_NAME = "favorites";
+  const TEMPLATES_STORE_NAME = "templates";
+  const TEMPLATE_STORAGE_KEY = "promptTemplates";
 
   let currentMode = "mj";
   let outputTitleGenerationSeq = 0;
@@ -122,6 +127,167 @@
       templateCatalogByCategory.set(category, new Map());
     }
     return templateCatalogByCategory.get(category);
+  }
+
+  function openLocalDb() {
+    if (!("indexedDB" in window)) return Promise.resolve(null);
+    return new Promise(function (resolve) {
+      const req = indexedDB.open(LOCAL_DB_NAME, LOCAL_DB_VERSION);
+      req.onupgradeneeded = function () {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(FAVORITES_STORE_NAME)) {
+          db.createObjectStore(FAVORITES_STORE_NAME, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(TEMPLATES_STORE_NAME)) {
+          db.createObjectStore(TEMPLATES_STORE_NAME, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = function () {
+        resolve(req.result);
+      };
+      req.onerror = function () {
+        resolve(null);
+      };
+      req.onblocked = function () {
+        resolve(null);
+      };
+    });
+  }
+
+  function getLocalStoreItems(storeName) {
+    return new Promise(function (resolve) {
+      openLocalDb().then(function (db) {
+        if (!db || !db.objectStoreNames.contains(storeName)) {
+          if (db) db.close();
+          resolve([]);
+          return;
+        }
+        const tx = db.transaction(storeName, "readonly");
+        const req = tx.objectStore(storeName).getAll();
+        req.onsuccess = function () {
+          const items = Array.isArray(req.result) ? req.result : [];
+          db.close();
+          resolve(items);
+        };
+        req.onerror = function () {
+          db.close();
+          resolve([]);
+        };
+      });
+    });
+  }
+
+  function replaceLocalStoreItems(storeName, items) {
+    return new Promise(function (resolve) {
+      openLocalDb().then(function (db) {
+        if (!db || !db.objectStoreNames.contains(storeName)) {
+          if (db) db.close();
+          resolve(false);
+          return;
+        }
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        store.clear();
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+          store.put(item);
+        });
+        tx.oncomplete = function () {
+          db.close();
+          resolve(true);
+        };
+        tx.onerror = function () {
+          db.close();
+          resolve(false);
+        };
+        tx.onabort = function () {
+          db.close();
+          resolve(false);
+        };
+      });
+    });
+  }
+
+  function createLocalId(prefix) {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  }
+
+  function sanitizeLocalTemplates(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter(function (template) {
+        return template && typeof template === "object";
+      })
+      .map(function (template) {
+        const id = String(template.id || "").trim();
+        const label = String(template.label || "").trim();
+        const category = String(template.category || "").trim();
+        if (!id || !label || !category) return null;
+        return {
+          id: id,
+          label: label,
+          category: category,
+          tags: Array.isArray(template.tags)
+            ? template.tags.map(function (tag) {
+                return String(tag || "").trim();
+              }).filter(Boolean)
+            : [],
+          is_predefined: false,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function loadLocalStorageTemplates() {
+    try {
+      const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+      if (!raw) return [];
+      return sanitizeLocalTemplates(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+
+  function saveLocalStorageTemplates(items) {
+    try {
+      localStorage.setItem(
+        TEMPLATE_STORAGE_KEY,
+        JSON.stringify(sanitizeLocalTemplates(items))
+      );
+    } catch {}
+  }
+
+  async function loadLocalTemplates() {
+    const fallback = loadLocalStorageTemplates();
+    const indexed = sanitizeLocalTemplates(
+      await getLocalStoreItems(TEMPLATES_STORE_NAME)
+    );
+    if (indexed.length) {
+      saveLocalStorageTemplates(indexed);
+      return indexed;
+    }
+    if (fallback.length) {
+      await replaceLocalStoreItems(TEMPLATES_STORE_NAME, fallback);
+    }
+    return fallback;
+  }
+
+  async function saveLocalTemplates(items) {
+    const clean = sanitizeLocalTemplates(items);
+    saveLocalStorageTemplates(clean);
+    await replaceLocalStoreItems(TEMPLATES_STORE_NAME, clean);
+  }
+
+  function getUserTemplates() {
+    const out = [];
+    templateCatalogByCategory.forEach(function (templateMap) {
+      templateMap.forEach(function (template) {
+        if (template.is_predefined !== true) out.push(template);
+      });
+    });
+    return sanitizeLocalTemplates(out);
   }
 
   function registerTemplate(template) {
@@ -806,32 +972,15 @@
     }
 
     try {
-      const resp = await fetch("/templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label: trimmed,
-          category: category,
-          tags: tags,
-        }),
-      });
-      if (!resp.ok) {
-        let detail = "";
-        try {
-          const errBody = await resp.json();
-          if (errBody && typeof errBody.error === "string") {
-            detail = ": " + errBody.error;
-          }
-        } catch {
-          /* noop */
-        }
-        return {
-          ok: false,
-          error: "Could not create template (HTTP " + resp.status + ")" + detail + ".",
-        };
-      }
-      const created = await resp.json();
+      const created = {
+        id: createLocalId("template"),
+        label: trimmed,
+        category: category,
+        tags: tags,
+        is_predefined: false,
+      };
       registerTemplate(created);
+      await saveLocalTemplates(getUserTemplates());
 
       const selectEl = categoryTemplateSelectEls.find(function (el) {
         return (el.getAttribute("data-category") || "") === category;
@@ -853,7 +1002,7 @@
       return {
         ok: false,
         error:
-          "Could not reach the server: " +
+          "Could not save template locally: " +
           (err && err.message ? err.message : String(err)),
       };
     }
@@ -869,32 +1018,15 @@
     }
 
     try {
-      const resp = await fetch("/templates/" + encodeURIComponent(templateId), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label: trimmed,
-          category: category,
-          tags: tags,
-        }),
-      });
-      if (!resp.ok) {
-        let detail = "";
-        try {
-          const errBody = await resp.json();
-          if (errBody && typeof errBody.error === "string") {
-            detail = ": " + errBody.error;
-          }
-        } catch {
-          /* noop */
-        }
-        return {
-          ok: false,
-          error: "Could not update template (HTTP " + resp.status + ")" + detail + ".",
-        };
-      }
-      const updated = await resp.json();
+      const updated = {
+        id: templateId,
+        label: trimmed,
+        category: category,
+        tags: tags,
+        is_predefined: false,
+      };
       registerTemplate(updated);
+      await saveLocalTemplates(getUserTemplates());
       const selectEl = findTemplateSelectForCategory(category);
       if (selectEl) {
         updateTemplateOption(selectEl, updated);
@@ -908,7 +1040,7 @@
       return {
         ok: false,
         error:
-          "Could not reach the server: " +
+          "Could not update template locally: " +
           (err && err.message ? err.message : String(err)),
       };
     }
@@ -923,17 +1055,8 @@
     }
 
     try {
-      const resp = await fetch("/templates/" + encodeURIComponent(id), {
-        method: "DELETE",
-      });
-      if (!resp.ok) {
-        return {
-          ok: false,
-          error: "Could not delete template (HTTP " + resp.status + ").",
-        };
-      }
-
       getCategoryTemplateMap(cat).delete(id);
+      await saveLocalTemplates(getUserTemplates());
       const selectedIds = ensureSelectedTemplateIds(cat).filter(function (selectedId) {
         return selectedId !== id;
       });
@@ -950,7 +1073,7 @@
       return {
         ok: false,
         error:
-          "Could not reach the server: " +
+          "Could not delete template locally: " +
           (err && err.message ? err.message : String(err)),
       };
     }
@@ -1504,10 +1627,7 @@
 
   async function loadUserTemplates() {
     try {
-      const resp = await fetch("/templates");
-      if (!resp.ok) return;
-      const items = await resp.json();
-      if (!Array.isArray(items)) return;
+      const items = await loadLocalTemplates();
       items.forEach(function (template) {
         registerTemplate(template);
       });
@@ -2012,8 +2132,6 @@
 
   (function FavoritesManager() {
     const STORAGE_KEY = "promptFavorites";
-    const FAVORITES_DB_NAME = "musePromptBuilder";
-    const FAVORITES_STORE_NAME = "favorites";
     const listEl = document.getElementById("favorites-list");
     const emptyEl = document.getElementById("favorites-empty");
     const modal = document.getElementById("favorite-save-modal");
@@ -2055,20 +2173,20 @@
     }
 
     function createFavoriteId() {
-      if (window.crypto && typeof window.crypto.randomUUID === "function") {
-        return window.crypto.randomUUID();
-      }
-      return "fav-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      return createLocalId("fav");
     }
 
     function openFavoritesDb() {
       if (!("indexedDB" in window)) return Promise.resolve(null);
       return new Promise(function (resolve) {
-        const req = indexedDB.open(FAVORITES_DB_NAME, 1);
+        const req = indexedDB.open(LOCAL_DB_NAME, LOCAL_DB_VERSION);
         req.onupgradeneeded = function () {
           const db = req.result;
           if (!db.objectStoreNames.contains(FAVORITES_STORE_NAME)) {
             db.createObjectStore(FAVORITES_STORE_NAME, { keyPath: "id" });
+          }
+          if (!db.objectStoreNames.contains(TEMPLATES_STORE_NAME)) {
+            db.createObjectStore(TEMPLATES_STORE_NAME, { keyPath: "id" });
           }
         };
         req.onsuccess = function () {

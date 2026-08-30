@@ -42,8 +42,8 @@ def init_db(db_path: str, templates_json_path: str, valid_categories: set[str]) 
             )
             """
         )
+        conn.execute("DELETE FROM user_templates")
         conn.commit()
-    _migrate_templates_from_json_if_empty(db_path, templates_json_path, valid_categories)
 
 
 def _ensure_column(

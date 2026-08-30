@@ -33,13 +33,9 @@ from config import (
 )
 from db import (
     create_saved_prompt,
-    create_user_template,
     delete_saved_prompt,
-    delete_user_template,
     init_db,
     list_saved_prompts,
-    list_user_templates,
-    update_user_template,
 )
 
 
@@ -171,10 +167,6 @@ def _fetch_openrouter_model_entries() -> tuple[list[dict], str | None]:
     return _openrouter_model_entries(), None
 
 
-def _load_user_templates() -> list[dict]:
-    return list_user_templates(STORAGE_DB_PATH, VALID_TEMPLATE_CATEGORIES)
-
-
 def _group_templates_by_category() -> dict[str, list[dict]]:
     grouped: dict[str, list[dict]] = {category: [] for category in TAGS.keys()}
     for category, values in CATEGORY_TEMPLATES.items():
@@ -198,10 +190,6 @@ def _group_templates_by_category() -> dict[str, list[dict]]:
                     "is_predefined": True,
                 }
             )
-    for item in _load_user_templates():
-        category = item.get("category")
-        if category in grouped:
-            grouped[category].append(item)
     return grouped
 
 
@@ -270,61 +258,22 @@ def service_worker():
 
 @app.route("/templates", methods=["GET"])
 def list_templates():
-    return jsonify(_load_user_templates())
+    return jsonify([])
 
 
 @app.route("/templates", methods=["POST"])
 def create_template():
-    data = request.get_json(silent=True) or {}
-    label_raw = data.get("label")
-    category = data.get("category")
-    if not isinstance(label_raw, str) or not label_raw.strip():
-        return jsonify({"error": "label is required"}), 400
-    if category not in TAGS:
-        return jsonify({"error": "invalid category"}), 400
-    new_template = {
-        "id": str(uuid.uuid4()),
-        "label": label_raw.strip(),
-        "category": category,
-        "tags": _clean_string_list(data.get("tags")),
-        "is_predefined": False,
-    }
-    created = create_user_template(
-        STORAGE_DB_PATH,
-        template_id=new_template["id"],
-        label=new_template["label"],
-        category=new_template["category"],
-        tags=new_template["tags"],
-        created_at=int(time.time() * 1000),
-    )
-    return jsonify(created)
+    return jsonify({"error": "Tag templates are saved locally in this browser."}), 410
 
 
 @app.route("/templates/<template_id>", methods=["DELETE"])
 def delete_template(template_id: str):
-    delete_user_template(STORAGE_DB_PATH, template_id)
     return jsonify({"ok": True})
 
 
 @app.route("/templates/<template_id>", methods=["PUT"])
 def update_template(template_id: str):
-    data = request.get_json(silent=True) or {}
-    label_raw = data.get("label")
-    category = data.get("category")
-    if not isinstance(label_raw, str) or not label_raw.strip():
-        return jsonify({"error": "label is required"}), 400
-    if category not in TAGS:
-        return jsonify({"error": "invalid category"}), 400
-    updated = update_user_template(
-        STORAGE_DB_PATH,
-        template_id=template_id,
-        label=label_raw.strip(),
-        category=category,
-        tags=_clean_string_list(data.get("tags")),
-    )
-    if updated is None:
-        return jsonify({"error": "template not found"}), 404
-    return jsonify(updated)
+    return jsonify({"error": "Tag templates are saved locally in this browser."}), 410
 
 
 @app.route("/saved-prompts", methods=["GET"])
