@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections import defaultdict, deque
 import json
 import os
+import re
+import threading
 import time
 import uuid
 
@@ -15,6 +18,7 @@ from flask import (
     send_from_directory,
     stream_with_context,
 )
+from werkzeug.exceptions import BadRequest
 
 from config import (
     CATEGORY_TEMPLATES,
@@ -54,6 +58,154 @@ BLOCKED_OPENROUTER_MODELS = {
     "meta/muse-spark-1.2-contributor",
     "mistralai/mistral-7b-instruct",
 }
+MAX_JSON_BODY_BYTES = 16 * 1024
+MAX_PROMPT_CHARS = 4000
+RATE_WINDOW_SECONDS = 10 * 60
+RATE_LIMIT_CALLS = 20
+GENERIC_PROVIDER_ERROR = (
+    "Muse could not reach the image prompt model cleanly. Please try another model or try again soon."
+)
+rate_lock = threading.Lock()
+rate_calls_by_ip: dict[str, deque[float]] = defaultdict(deque)
+inflight_streams_by_ip: dict[str, int] = defaultdict(int)
+VISUAL_TERMS = {
+    "animal",
+    "architecture",
+    "building",
+    "camera",
+    "cat",
+    "character",
+    "city",
+    "creature",
+    "dog",
+    "face",
+    "figure",
+    "forest",
+    "landscape",
+    "light",
+    "monster",
+    "mountain",
+    "painting",
+    "person",
+    "photo",
+    "portrait",
+    "robot",
+    "scene",
+    "sky",
+    "space",
+    "subject",
+    "vehicle",
+    "woman",
+    "man",
+}
+OFF_TASK_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\bignore (all |any |the )?(previous|prior|above|system|developer|instructions?)\b",
+        r"\b(disregard|override) (all |any |the )?(previous|prior|above|system|developer|instructions?)\b",
+        r"\b(reply|respond|say|return|print|output)\b.{0,60}\b(exactly|only|just|nothing else)\b",
+        r"\b(write|create|draft)\b.{0,50}\b(code|python|javascript|email|essay|phishing|malware)\b",
+        r"\b(reveal|show|print|dump)\b.{0,50}\b(system prompt|system instructions|developer message|api key)\b",
+        r"\broleplay\b",
+        r"\btranslate\b",
+        r"\bjailbreak\b",
+    )
+]
+
+
+def _json_error(error: str, status: int, message: str | None = None):
+    payload = {"error": error}
+    if message:
+        payload["message"] = message
+    return jsonify(payload), status
+
+
+def _client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or "unknown"
+    return request.remote_addr or "unknown"
+
+
+def _allowed_model_names() -> set[str]:
+    return {entry["name"] for entry in _openrouter_model_entries()}
+
+
+def _resolve_allowed_model(data: dict):
+    raw = data.get("model", "")
+    model = raw.strip() if isinstance(raw, str) and raw.strip() else MODEL_NAME
+    # Only server allowlisted models may reach OpenRouter.
+    if model not in _allowed_model_names():
+        return "", _json_error("invalid_model", 400)
+    return model, None
+
+
+def _require_json_payload():
+    # Keep public POSTs from accepting form/text bodies that bypass validation.
+    if not request.is_json:
+        return None, _json_error("invalid_json", 400)
+    # Bound request size before JSON parsing so anonymous clients cannot post huge bodies.
+    if request.content_length is not None and request.content_length > MAX_JSON_BODY_BYTES:
+        return None, _json_error("body_too_large", 400)
+    try:
+        data = request.get_json(silent=False)
+    except BadRequest:
+        return None, _json_error("invalid_json", 400)
+    if not isinstance(data, dict):
+        return None, _json_error("invalid_json", 400)
+    return data, None
+
+
+def _validated_prompt_text(data: dict, key: str):
+    raw = data.get(key, "")
+    text = raw.strip() if isinstance(raw, str) else ""
+    if not text:
+        return "", _json_error("empty_prompt", 400)
+    # Reject oversized user text consistently instead of forwarding partial instructions.
+    if len(text) > MAX_PROMPT_CHARS:
+        return "", _json_error("prompt_too_large", 400)
+    return text, None
+
+
+def _has_visual_content(text: str, tags: list[str] | None = None) -> bool:
+    joined = " ".join((tags or []) + [text]).lower()
+    return any(term in joined for term in VISUAL_TERMS)
+
+
+def _is_clearly_off_task(text: str, tags: list[str] | None = None) -> bool:
+    if _has_visual_content(text, tags):
+        return False
+    return any(pattern.search(text or "") for pattern in OFF_TASK_PATTERNS)
+
+
+def _check_rate_limit(include_stream_slot: bool):
+    ip = _client_ip()
+    now = time.monotonic()
+    with rate_lock:
+        calls = rate_calls_by_ip[ip]
+        while calls and now - calls[0] > RATE_WINDOW_SECONDS:
+            calls.popleft()
+        # Limit anonymous public use before it can spend OpenRouter tokens.
+        if len(calls) >= RATE_LIMIT_CALLS:
+            return ip, _json_error("rate_limited", 429, "Muse is busy. Please try again soon.")
+        if include_stream_slot and inflight_streams_by_ip[ip] >= 1:
+            return ip, _json_error("rate_limited", 429, "Muse is already generating for you. Please wait for it to finish.")
+        calls.append(now)
+        if include_stream_slot:
+            inflight_streams_by_ip[ip] += 1
+    return ip, None
+
+
+def _release_stream_slot(ip: str) -> None:
+    with rate_lock:
+        inflight_streams_by_ip[ip] = max(0, inflight_streams_by_ip[ip] - 1)
+
+
+def _limited_stream(ip: str, iterator):
+    try:
+        yield from iterator
+    finally:
+        _release_stream_slot(ip)
 
 
 def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
@@ -75,7 +227,7 @@ def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
 
 def _openrouter_chat_stream(model: str, system: str, user: str):
     if not OPENROUTER_API_KEY:
-        yield "[OpenRouter error: OPENROUTER_API_KEY not set in .env]"
+        yield GENERIC_PROVIDER_ERROR
         return
 
     url = f"{OPENROUTER_BASE_URL}/chat/completions"
@@ -102,7 +254,7 @@ def _openrouter_chat_stream(model: str, system: str, user: str):
                 if _is_openrouter_usage_limit(resp.status_code, body):
                     yield "[Muse usage limit: " + OPENROUTER_USAGE_LIMIT_MESSAGE + "]"
                     return
-                yield f"\n[OpenRouter error {resp.status_code}: {body}]"
+                yield GENERIC_PROVIDER_ERROR
                 return
             for raw_line in resp.iter_lines(decode_unicode=True):
                 if not raw_line:
@@ -124,8 +276,8 @@ def _openrouter_chat_stream(model: str, system: str, user: str):
                 chunk = delta.get("content") or ""
                 if chunk:
                     yield chunk
-    except requests.exceptions.RequestException as e:
-        yield f"\n[OpenRouter error: {e}]"
+    except requests.exceptions.RequestException:
+        yield GENERIC_PROVIDER_ERROR
 
 
 def _llm_stream(model: str, system: str, user: str):
@@ -195,7 +347,7 @@ def _fetch_openrouter_model_entries() -> tuple[list[dict], str | None]:
     if not OPENROUTER_API_KEY:
         return (
             _openrouter_model_entries(),
-            "OPENROUTER_API_KEY not set in .env - OpenRouter models disabled.",
+            "The model list is unavailable right now. Please try again soon.",
         )
     return _openrouter_model_entries(), None
 
@@ -365,7 +517,12 @@ def delete_saved_prompt_route(prompt_id: str):
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    data = request.get_json(silent=True) or {}
+    data, error_response = _require_json_payload()
+    if error_response:
+        return error_response
+    model_name, error_response = _resolve_allowed_model(data)
+    if error_response:
+        return error_response
     raw_tags = data.get("tags")
     if not isinstance(raw_tags, list):
         raw_tags = []
@@ -430,6 +587,12 @@ def generate():
         free_text = ""
     else:
         free_text = str(free_text_raw).strip()
+    # Bound free text before it can become expensive model context.
+    if len(free_text) > MAX_PROMPT_CHARS:
+        return _json_error("prompt_too_large", 400)
+    # Keep Muse scoped to image prompting instead of anonymous general chat.
+    if _is_clearly_off_task(free_text, tags):
+        return _json_error("off_task", 400, "Muse only builds image prompts.")
 
     output_mode_raw = data.get("output_mode", "mj")
     if isinstance(output_mode_raw, str):
@@ -443,34 +606,38 @@ def generate():
     else:
         system_prompt = MJ_SYSTEM_PROMPT
 
-    model_raw = data.get("model", "")
-    selected_model = model_raw.strip() if isinstance(model_raw, str) else ""
-    model_name = selected_model or MODEL_NAME
-
     user_prompt = build_user_prompt(
         tags,
         free_text,
         selected_by_category=selected_by_category,
     )
 
+    ip, error_response = _check_rate_limit(include_stream_slot=True)
+    if error_response:
+        return error_response
     return Response(
-        stream_with_context(_llm_stream(model_name, system_prompt, user_prompt)),
+        stream_with_context(
+            _limited_stream(ip, _llm_stream(model_name, system_prompt, user_prompt))
+        ),
         mimetype="text/plain",
     )
 
 
 @app.route("/refine", methods=["POST"])
 def refine():
-    data = request.get_json(silent=True) or {}
+    data, error_response = _require_json_payload()
+    if error_response:
+        return error_response
+    model_name, error_response = _resolve_allowed_model(data)
+    if error_response:
+        return error_response
 
-    prompt_raw = data.get("prompt", "")
-    prompt_text = prompt_raw.strip() if isinstance(prompt_raw, str) else ""
-    if not prompt_text:
-        return jsonify({"error": "empty prompt"}), 400
-
-    model_raw = data.get("model", "")
-    selected_model = model_raw.strip() if isinstance(model_raw, str) else ""
-    model_name = selected_model or MODEL_NAME
+    prompt_text, error_response = _validated_prompt_text(data, "prompt")
+    if error_response:
+        return error_response
+    # Refine only accepts existing image prompts, not arbitrary instructions.
+    if _is_clearly_off_task(prompt_text):
+        return _json_error("off_task", 400, "Muse only builds image prompts.")
 
     user_prompt = (
         "Refine and improve the following image generation prompt. "
@@ -479,9 +646,12 @@ def refine():
         f"ORIGINAL PROMPT:\n{prompt_text}"
     )
 
+    ip, error_response = _check_rate_limit(include_stream_slot=True)
+    if error_response:
+        return error_response
     return Response(
         stream_with_context(
-            _llm_stream(model_name, REFINE_SYSTEM_PROMPT, user_prompt)
+            _limited_stream(ip, _llm_stream(model_name, REFINE_SYSTEM_PROMPT, user_prompt))
         ),
         mimetype="text/plain",
     )
@@ -489,23 +659,31 @@ def refine():
 
 @app.route("/prompt-title", methods=["POST"])
 def prompt_title():
-    data = request.get_json(silent=True) or {}
-    prompt_raw = data.get("prompt", "")
-    prompt_text = prompt_raw.strip() if isinstance(prompt_raw, str) else ""
-    if not prompt_text:
-        return jsonify({"error": "prompt is required"}), 400
-
-    model_raw = data.get("model", "")
-    selected_model = model_raw.strip() if isinstance(model_raw, str) else ""
-    model_name = selected_model or MODEL_NAME
+    data, error_response = _require_json_payload()
+    if error_response:
+        return error_response
+    model_name, error_response = _resolve_allowed_model(data)
+    if error_response:
+        return error_response
+    prompt_text, error_response = _validated_prompt_text(data, "prompt")
+    if error_response:
+        return error_response
+    # Title generation should not spend tokens on instruction-injection text.
+    if _is_clearly_off_task(prompt_text):
+        return _json_error("off_task", 400, "Muse only builds image prompts.")
 
     user_msg = (
         "Suggest a concise reference title for this image-generation prompt "
         "(positive prompt text only):\n\n"
         f"{prompt_text}"
     )
+    _, error_response = _check_rate_limit(include_stream_slot=False)
+    if error_response:
+        return error_response
     raw_title = _collect_llm_response(model_name, TITLE_SYSTEM_PROMPT, user_msg)
     rt = (raw_title or "").strip()
+    if rt == GENERIC_PROVIDER_ERROR or rt.startswith("[Muse usage limit:"):
+        return jsonify({"title": ""})
     if rt.startswith("[") and "error" in rt.lower():
         return jsonify({"title": ""})
     title = _normalize_generated_title(raw_title)
@@ -525,16 +703,19 @@ def list_models():
 
 @app.route("/warmup", methods=["POST"])
 def warmup():
-    data = request.get_json(silent=True) or {}
-    model_raw = data.get("model", "")
-    model_name = (model_raw.strip() if isinstance(model_raw, str) else "") or MODEL_NAME
+    data, error_response = _require_json_payload()
+    if error_response:
+        return error_response
+    model_name, error_response = _resolve_allowed_model(data)
+    if error_response:
+        return error_response
 
     if not OPENROUTER_API_KEY:
         return jsonify(
             {
                 "ok": False,
                 "model": model_name,
-                "error": "OPENROUTER_API_KEY not set in .env",
+                "error": "model list is unavailable",
             }
         )
     return jsonify({"ok": True, "model": model_name, "load_seconds": 0})

@@ -1637,7 +1637,7 @@
       ) {
         setModelStatus(
           "error",
-          "OpenRouter returned no models. Check OPENROUTER_API_KEY in .env."
+          "The model list is unavailable right now. Please try again soon."
         );
       } else {
         setModelStatus("idle", "");
@@ -1755,6 +1755,7 @@
 
       if (!response.ok) {
         let errText = "";
+        let errCode = "";
         try {
           const errJson = await response.json();
           if (
@@ -1774,12 +1775,17 @@
           } else {
             errText = JSON.stringify(errJson || {});
           }
+          if (errJson && typeof errJson.error === "string") {
+            errCode = errJson.error;
+          }
         } catch {
           errText = await response.text();
         }
         if (outputPositive) {
           outputPositive.value =
-            response.status === 429 || isUsageLimitText(errText)
+            errCode === "rate_limited"
+              ? errText || "Muse is busy. Please try again soon."
+              : response.status === 429 || isUsageLimitText(errText)
               ? formatUsageLimitOutput()
               : "[Request failed: " + response.status + "] " + (errText || "");
         }
@@ -1921,9 +1927,27 @@
       });
 
       if (!response.ok) {
-        const errText = await response.text();
+        let errText = "";
+        let errCode = "";
+        try {
+          const errJson = await response.json();
+          if (errJson && typeof errJson.message === "string") {
+            errText = errJson.message;
+          } else if (errJson && typeof errJson.error === "string") {
+            errText = errJson.error;
+          } else {
+            errText = JSON.stringify(errJson || {});
+          }
+          if (errJson && typeof errJson.error === "string") {
+            errCode = errJson.error;
+          }
+        } catch {
+          errText = await response.text();
+        }
         outputPositive.value =
-          response.status === 429 || isUsageLimitText(errText)
+          errCode === "rate_limited"
+            ? errText || "Muse is busy. Please try again soon."
+            : response.status === 429 || isUsageLimitText(errText)
             ? formatUsageLimitOutput()
             : "[Refine failed: " + response.status + "] " + (errText || "");
         return;
