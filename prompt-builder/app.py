@@ -50,7 +50,7 @@ def _is_openrouter_model(name: str) -> bool:
 OPENROUTER_USAGE_LIMIT_MESSAGE = (
     "Muse has reached its daily OpenRouter usage limit. Please check back after "
     "OpenRouter's usual reset time at midnight UTC. If you notice this happening "
-    "often, or you need a temporary rate limit increase, drop Alex a note at "
+    "often, or you need a temporary rate limit increase, drop Aaron a note at "
     "@dicemanorama on X."
 )
 BLOCKED_OPENROUTER_MODELS = {

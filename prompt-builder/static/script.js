@@ -128,7 +128,7 @@
   const platformSettings = document.getElementById("platform-settings");
   const DEFAULT_MODEL = "google/gemma-3-12b-it";
   const USAGE_LIMIT_MESSAGE =
-    "Muse has reached its daily OpenRouter usage limit. Please check back after OpenRouter's usual reset time at midnight UTC. If you notice this happening often, or you need a temporary rate limit increase, drop Alex a note at @dicemanorama on X.";
+    "Muse has reached its daily OpenRouter usage limit. Please check back after OpenRouter's usual reset time at midnight UTC. If you notice this happening often, or you need a temporary rate limit increase, drop Aaron a note at @dicemanorama on X.";
   const THINKING_SCROLLS = [
     "Arranging the visual ingredients",
     "Shuffling the mood board",
