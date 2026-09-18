@@ -522,13 +522,14 @@
     return (
       s.includes("[muse usage limit:") ||
       (s.includes("openrouter") &&
-        (s.includes("budget") ||
-          s.includes("rate limit") ||
+        (s.includes("budget limit") ||
+          s.includes("insufficient credit") ||
+          s.includes("credit limit") ||
           s.includes("spending limit") ||
           s.includes("usage limit") ||
           s.includes("free-models-per-day") ||
-          s.includes("limit exceeded") ||
-          s.includes("too many requests")))
+          s.includes("free model requests per day") ||
+          s.includes("daily quota")))
     );
   }
 

@@ -210,17 +210,23 @@ def _limited_stream(ip: str, iterator):
 
 def _is_openrouter_usage_limit(status_code: int, body: str) -> bool:
     lowered = (body or "").lower()
+    # A 429 normally means temporary provider/request throttling, not that this
+    # API key has exhausted its spend. Only show the daily-limit notice for
+    # payment failures or responses that explicitly identify a spend/quota cap.
+    if status_code == 402:
+        return True
     return status_code in {403, 429} and any(
         marker in lowered
         for marker in (
-            "budget",
-            "rate limit",
-            "rate_limit",
+            "budget limit",
+            "budget_limit",
+            "insufficient credit",
+            "credit limit",
             "spending limit",
             "usage limit",
             "free-models-per-day",
-            "limit exceeded",
-            "too many requests",
+            "free model requests per day",
+            "daily quota",
         )
     )
 

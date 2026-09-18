@@ -158,3 +158,25 @@ def test_warmup_rejects_non_allowlisted_model(monkeypatch):
 
     assert resp.status_code == 400
     assert resp.get_json()["error"] == "invalid_model"
+
+
+def test_openrouter_temporary_rate_limit_is_not_usage_limit():
+    body = '{"error":{"code":429,"message":"Provider returned rate limit exceeded"}}'
+
+    assert app_module._is_openrouter_usage_limit(429, body) is False
+
+
+def test_openrouter_too_many_requests_is_not_usage_limit():
+    body = '{"error":{"message":"Too many requests. Please try again later."}}'
+
+    assert app_module._is_openrouter_usage_limit(429, body) is False
+
+
+def test_openrouter_explicit_budget_limit_is_usage_limit():
+    body = '{"error":{"message":"API key budget limit exceeded"}}'
+
+    assert app_module._is_openrouter_usage_limit(429, body) is True
+
+
+def test_openrouter_payment_required_is_usage_limit():
+    assert app_module._is_openrouter_usage_limit(402, "") is True
