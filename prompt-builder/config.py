@@ -97,10 +97,11 @@ MJ_SYSTEM_PROMPT = (
     "     space when relevant.\n"
     "  8. DETAIL / FINISH - close with 1-3 specific finish details; avoid over-stacked generic boosters.\n\n"
 
-    "REQUIRED NAMED SUBJECT HANDLING:\n"
-    "- When the user supplies one or more named Subject templates, each template is a required, distinct "
-    "subject. Include every template name in the prompt, keep its associated descriptors attached to that "
-    "person or subject, and never merge, replace, or omit one for concision.\n\n"
+    "REQUIRED MULTI-SUBJECT TEMPLATE HANDLING:\n"
+    "- Each supplied Subject template group is a required, distinct subject. Include every described "
+    "subject, keep each group's descriptors attached to that person or subject, and never merge, replace, "
+    "or omit a group for concision. Group numbers are structural only: never output them or invent names "
+    "for the subjects. Template titles are UI-only metadata and are not prompt content.\n\n"
 
     "MIDJOURNEY SYNTAX AWARENESS:\n"
     "- Group multi-word concepts so they read as a unit.\n"

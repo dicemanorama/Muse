@@ -422,15 +422,12 @@ def _clean_selected_templates(raw) -> list[dict[str, object]]:
         if not isinstance(item, dict):
             continue
         template_id_raw = item.get("id")
-        label_raw = item.get("label")
         template_id = template_id_raw.strip() if isinstance(template_id_raw, str) else ""
-        label = label_raw.strip() if isinstance(label_raw, str) else ""
         tags = _clean_string_list(item.get("tags"))
-        identity = template_id or label.casefold()
-        if not label or not identity or identity in seen:
+        if not template_id or template_id in seen:
             continue
-        seen.add(identity)
-        out.append({"id": template_id, "label": label, "tags": tags})
+        seen.add(template_id)
+        out.append({"id": template_id, "tags": tags})
     return out
 
 
@@ -446,7 +443,8 @@ def build_user_prompt(
     if isinstance(selected_by_category, dict) and selected_by_category:
         category_parts: list[str] = []
         template_parts: list[str] = []
-        named_subject_count = 0
+        subject_template_count = 0
+        template_counts_by_category: dict[str, int] = {}
         for category in _ordered_prompt_categories():
             raw_entry = selected_by_category.get(category)
             if not isinstance(raw_entry, dict):
@@ -479,22 +477,32 @@ def build_user_prompt(
                 category_parts.append(f"{category}: {', '.join(direct_items)}")
 
             for template in selected_templates:
-                label = str(template["label"])
                 template_tags = [str(tag) for tag in template["tags"]]
-                details = ", ".join(template_tags) if template_tags else "use the named identity"
-                template_parts.append(f'- {category} template "{label}": {details}')
+                details = ", ".join(template_tags)
+                if not details:
+                    continue
+                template_counts_by_category[category] = (
+                    template_counts_by_category.get(category, 0) + 1
+                )
+                group_number = template_counts_by_category[category]
+                template_parts.append(
+                    f"- {category} template group {group_number}: {details}"
+                )
                 if category == "Subject":
-                    named_subject_count += 1
+                    subject_template_count += 1
         if category_parts:
             parts.append("Selected tags by category:\n- " + "\n- ".join(category_parts))
             has_category_parts = True
         if template_parts:
-            heading = "Selected named templates (keep each template and its details together):"
-            if named_subject_count:
+            heading = (
+                "Selected template groups (group numbers are structural only; never include them "
+                "in the output):"
+            )
+            if subject_template_count:
                 heading += (
-                    "\nEvery named Subject template is a separate required subject. Include each subject "
-                    "by its template name, keep its descriptors attached to that subject, and do not merge, "
-                    "replace, or omit any of them."
+                    "\nEvery Subject template group is a separate required subject. Keep each group's "
+                    "descriptors attached to that subject, and do not merge, replace, or omit any group. "
+                    "Template titles are UI-only metadata and must not appear in the output."
                 )
             parts.append(heading + "\n" + "\n".join(template_parts))
             has_category_parts = True

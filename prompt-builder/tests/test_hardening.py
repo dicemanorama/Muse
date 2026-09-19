@@ -78,7 +78,7 @@ def test_build_user_prompt_orders_midjourney_categories_without_flat_duplicate()
     assert "subject and action first" in prompt
 
 
-def test_build_user_prompt_preserves_multiple_named_subject_templates():
+def test_build_user_prompt_preserves_multiple_subject_templates_without_titles():
     prompt = app_module.build_user_prompt(
         ["red scarf", "round glasses", "blue jacket", "freckles"],
         "Both people are adjusting their goggles.",
@@ -104,22 +104,26 @@ def test_build_user_prompt_preserves_multiple_named_subject_templates():
         output_mode="mj",
     )
 
-    assert 'Subject template "Oliver": red scarf, round glasses' in prompt
-    assert 'Subject template "Me": blue jacket, freckles' in prompt
-    assert "Every named Subject template is a separate required subject" in prompt
+    assert "Subject template group 1: red scarf, round glasses" in prompt
+    assert "Subject template group 2: blue jacket, freckles" in prompt
+    assert "Every Subject template group is a separate required subject" in prompt
+    assert "Oliver" not in prompt
+    assert "Me" not in prompt
     assert "Subject: red scarf, round glasses, blue jacket, freckles" not in prompt
 
 
-def test_generate_keeps_named_subject_template_groups(monkeypatch):
+def test_generate_keeps_subject_groups_but_does_not_pass_template_titles(monkeypatch):
     client = _client(monkeypatch)
     model = _allowed_model(client)
 
     def fake_stream(model_name, system, user):
         assert model_name == model
-        assert 'Subject template "Oliver": red scarf' in user
-        assert 'Subject template "Me": blue jacket' in user
-        assert "each template is a required, distinct subject" in system
-        yield "Oliver in a red scarf beside Me in a blue jacket"
+        assert "Subject template group 1: red scarf" in user
+        assert "Subject template group 2: blue jacket" in user
+        assert "Oliver" not in user
+        assert "Me" not in user
+        assert "Each supplied Subject template group is a required, distinct subject" in system
+        yield "A person in a red scarf beside a person in a blue jacket"
 
     monkeypatch.setattr(app_module, "_llm_stream", fake_stream)
     response = client.post(
@@ -142,7 +146,7 @@ def test_generate_keeps_named_subject_template_groups(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert b"Oliver" in response.data
+    assert b"red scarf" in response.data
 
 
 def test_invalid_json_is_rejected(monkeypatch):

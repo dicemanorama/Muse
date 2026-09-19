@@ -1728,7 +1728,6 @@
           if (!template) return null;
           return {
             id: template.id,
-            label: template.label,
             tags: Array.isArray(template.tags) ? template.tags.slice() : [],
           };
         })
