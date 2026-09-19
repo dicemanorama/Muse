@@ -1,5 +1,6 @@
 import importlib
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -50,3 +51,13 @@ def test_expansion_does_not_pad_existing_tags_with_generic_suffixes():
     for values in config.TAGS.values():
         for value in values:
             assert not any(phrase in value for phrase in rejected_phrases)
+
+
+def test_curated_sections_do_not_contain_large_repeated_prefix_families():
+    for category in (
+        "Subject", "Location", "Action", "Style", "Mood", "Lighting", "Camera", "Color",
+        "Detail"
+    ):
+        values = config.CURATED_TAG_EXPANSIONS[category]
+        first_words = Counter(value.split()[0].casefold() for value in values)
+        assert max(first_words.values()) <= 3
