@@ -1477,30 +1477,229 @@ for _category, _values in EXTRA_TAGS.items():
 TAGS = {_category: _sorted_unique_tags(_values) for _category, _values in TAGS.items()}
 
 
-# Give every existing option a distinct, useful variation. Keeping the variation
-# contextual to its category avoids generic numbered copies while ensuring each
-# dropdown has exactly twice as many choices as it did before this expansion.
-TAG_VARIATION_SUFFIXES = {
-    "Subject": " in a narrative scene",
-    "Location": " during changing weather",
-    "Action": " as the pivotal moment",
-    "Style": " with contemporary refinement",
-    "Mood": ", emotionally layered",
-    "Lighting": " with atmospheric diffusion",
-    "Camera": " with layered depth",
-    "Color": " with nuanced tonal contrast",
-    "Detail": " with tactile micro-detail",
+# These word banks create additional standalone concepts rather than restating an
+# existing tag with generic language appended to it. The combinations are kept
+# category-specific so every generated option remains useful as prompt input.
+TAG_EXPANSION_PARTS = {
+    "Subject": (
+        [
+            "amber-cloaked", "ash-covered", "brass-armored", "cinder-marked",
+            "cloud-roaming", "coral-crowned", "dawn-bound", "fog-shrouded",
+            "glass-masked", "iron-handed", "jade-robed", "moonlit",
+            "moss-covered", "obsidian-eyed", "storm-worn", "velvet-clad",
+        ],
+        [
+            "apothecary", "beekeeper", "cartographer", "deep-sea diver",
+            "engineer", "falconer", "gardener", "glassblower", "librarian",
+            "navigator", "puppeteer", "watchmaker",
+        ],
+        " ",
+    ),
+    "Location": (
+        [
+            "amber-lit", "ash-dusted", "bioluminescent", "cloud-wrapped",
+            "coral-lined", "crystal-roofed", "fogbound", "forgotten",
+            "frost-covered", "golden-hour", "ivy-choked", "lantern-filled",
+            "moonlit", "rain-polished", "wind-swept",
+        ],
+        [
+            "archive courtyard", "canal district", "cliffside workshop",
+            "desert conservatory", "glasshouse ruins", "harbor arcade",
+            "hilltop sanctuary", "market passage", "mountain tramway",
+            "observatory garden", "palace reservoir", "railway village",
+            "temple orchard",
+        ],
+        " ",
+    ),
+    "Style": (
+        [
+            "acrylic painting", "architectural sketch", "ceramic relief",
+            "charcoal illustration", "cut-paper collage", "digital matte painting",
+            "embroidered artwork", "glass mosaic", "ink wash", "linocut print",
+            "stop-motion miniature", "woodblock print",
+        ],
+        [
+            "with art nouveau geometry", "with bold negative space",
+            "with botanical ornament", "with cinematic scale",
+            "with dreamlike distortion", "with geometric abstraction",
+            "with hand-rendered texture", "with minimalist forms",
+            "with ornate borders", "with retro-futurist motifs",
+            "with theatrical staging", "with vintage editorial styling",
+        ],
+        " ",
+    ),
+    "Mood": (
+        [
+            "achingly", "boldly", "delicately", "eerily", "fiercely", "gently",
+            "hauntingly", "quietly", "radiantly", "restlessly", "solemnly", "tenderly",
+        ],
+        [
+            "anticipatory", "defiant", "dreamlike", "hopeful", "intimate",
+            "melancholic", "mysterious", "nostalgic", "otherworldly",
+            "peaceful", "triumphant",
+        ],
+        " ",
+    ),
+    "Lighting": (
+        [
+            "amber lantern light", "aurora light", "candlelit glow", "cold moonlight",
+            "dappled forest light", "diffused skylight", "golden sunrise",
+            "neon window light", "overcast daylight", "silver twilight",
+            "soft firelight", "warm studio light",
+        ],
+        [
+            "across drifting mist", "breaking through latticework",
+            "catching suspended dust", "filtered through rain",
+            "reflecting from wet stone", "rim-lighting the subject",
+            "spilling through an archway",
+        ],
+        " ",
+    ),
+    "Camera": (
+        [
+            "18mm ultra-wide view", "28mm environmental portrait", "35mm candid frame",
+            "50mm natural perspective", "85mm portrait view", "100mm macro view",
+            "aerial oblique view", "eye-level medium shot", "low-angle wide shot",
+            "overhead tableau", "telephoto landscape view", "waist-level portrait",
+        ],
+        [
+            "with compressed layers", "with deep spatial staging",
+            "with foreground framing", "with leading lines", "with negative space",
+            "with shallow focus", "with symmetrical framing",
+        ],
+        " ",
+    ),
+    "Color": (
+        [
+            "amber and ultramarine", "apricot and slate", "aqua and rust",
+            "burgundy and blush", "carmine and cream", "copper and midnight blue",
+            "emerald and lilac", "indigo and saffron", "moss and terracotta",
+            "peach and charcoal", "plum and seafoam", "teal and ochre",
+        ],
+        [
+            "in balanced contrast", "in cinematic saturation", "in faded tones",
+            "in luminous gradients", "in matte pigments", "in muted harmony",
+            "with vivid accent colors",
+        ],
+        " ",
+    ),
+    "Detail": (
+        [
+            "beaded condensation", "carved bone inlay", "delicate copper filigree",
+            "etched glass patterns", "frayed canvas edges", "hammered metal texture",
+            "hand-stitched seams", "layered paper fibers", "polished stone veining",
+            "salt-crusted surfaces", "translucent fabric folds", "weathered paint layers",
+        ],
+        [
+            "along the silhouette", "across foreground surfaces", "at macro scale",
+            "catching the light", "in precise relief", "on every edge",
+            "throughout the scene",
+        ],
+        " ",
+    ),
 }
 
 
-def _double_tag_options(category: str, values: list[str]) -> list[str]:
-    suffix = TAG_VARIATION_SUFFIXES[category]
-    variations = [f"{value}{suffix}" for value in values]
-    return _sorted_unique_tags(values + variations)
+ACTION_TAG_EXPANSIONS = [
+    f"{action} {subject}"
+    for action, subjects in {
+        "assembling": [
+            "a clockwork engine", "a field telescope", "a mosaic map", "a radio tower",
+            "a stained-glass window", "a steam-powered glider", "an automaton",
+            "an emergency shelter", "the final bridge section", "the ship's rigging",
+        ],
+        "charting": [
+            "a comet's path", "a mountain pass", "a new constellation", "a river delta",
+            "an ocean current", "hidden ley lines", "the cave network", "the coastline",
+            "the migrating herd", "the storm's movement",
+        ],
+        "decoding": [
+            "a celestial cipher", "a forgotten language", "a mysterious broadcast",
+            "a star map", "an ancient inscription", "encrypted coordinates",
+            "the alchemist's journal", "the carved runes", "the temple mural",
+            "the weathered manuscript",
+        ],
+        "excavating": [
+            "a buried gateway", "a fossil bed", "a frozen shipwreck", "a lost monument",
+            "a meteorite crater", "a ruined observatory", "an ancient mosaic",
+            "the collapsed tunnel", "the desert tomb", "the temple foundations",
+        ],
+        "forging": [
+            "a ceremonial blade", "a copper astrolabe", "a crystal key", "a golden mask",
+            "a meteorite hammer", "a royal seal", "an iron crown", "the final armor plate",
+            "the lighthouse lens", "the ship's anchor",
+        ],
+        "guiding": [
+            "a caravan through fog", "a child through the crowd", "a convoy across ice",
+            "a herd through the valley", "a rescue team underground", "a ship into harbor",
+            "pilgrims up the mountain", "the airship through a storm",
+            "the expedition home", "travelers across the dunes",
+        ],
+        "harvesting": [
+            "bioluminescent algae", "crystal fruit", "desert saffron", "floating seed pods",
+            "glowing mushrooms", "medicinal herbs", "moonlit rice", "pearls from the reef",
+            "storm glass", "wild tea leaves",
+        ],
+        "mapping": [
+            "a flooded cavern", "a forgotten district", "a glacier's fractures",
+            "a hidden archipelago", "a labyrinthine archive", "a ruined city",
+            "an underground passage", "the coral reef", "the lunar valley",
+            "the shifting dunes",
+        ],
+        "mending": [
+            "a broken instrument", "a ceremonial robe", "a cracked mosaic", "a fishing net",
+            "a mechanical wing", "a shattered lantern", "a torn sail", "an old tapestry",
+            "the observatory dome", "the village bridge",
+        ],
+        "observing": [
+            "a distant eclipse", "a forming thunderstorm", "a meteor shower", "a solar flare",
+            "a volcanic eruption", "migrating whales", "the aurora", "the city at dawn",
+            "the rising tide", "wildlife from a blind",
+        ],
+        "painting": [
+            "a festival banner", "a panoramic mural", "a portrait from memory",
+            "a royal stage set", "a temple ceiling", "a theater backdrop", "decorative armor",
+            "the airship's hull", "the market signs", "the village gates",
+        ],
+        "recovering": [
+            "a buried time capsule", "a fallen satellite", "a lost artifact",
+            "a missing expedition log", "a stolen crown", "an ancient ship's bell",
+            "the archive's last book", "the broken compass", "the ceremonial standard",
+            "the sunken statue",
+        ],
+        "sculpting": [
+            "a clay guardian", "a figure from ice", "a granite monument", "a jade animal",
+            "a marble portrait", "a sand cathedral", "a wooden marionette",
+            "the festival centerpiece", "the palace gargoyle", "the ship's figurehead",
+        ],
+        "tracking": [
+            "a drifting balloon", "a fading radio signal", "a forest fire", "a ghost ship",
+            "a hidden caravan", "a rare animal", "footprints through snow", "the incoming storm",
+            "the moon's shadow", "the source of the river",
+        ],
+    }.items()
+    for subject in subjects
+]
+
+
+def _expand_tag_options(category: str, values: list[str]) -> list[str]:
+    existing = {value.casefold() for value in values}
+    additions = []
+    if category == "Action":
+        candidates = ACTION_TAG_EXPANSIONS
+    else:
+        starts, ends, separator = TAG_EXPANSION_PARTS[category]
+        candidates = (f"{start}{separator}{end}" for start in starts for end in ends)
+    for candidate in candidates:
+        if candidate.casefold() not in existing:
+            additions.append(candidate)
+        if len(additions) == len(values):
+            return _sorted_unique_tags(values + additions)
+    raise ValueError(f"Not enough unique tag expansions for {category}")
 
 
 TAGS = {
-    _category: _double_tag_options(_category, _values)
+    _category: _expand_tag_options(_category, _values)
     for _category, _values in TAGS.items()
 }
 

@@ -33,3 +33,20 @@ def test_each_tag_dropdown_is_case_insensitively_alphabetized_and_unique():
     for values in config.TAGS.values():
         assert values == sorted(values, key=str.casefold)
         assert len(values) == len({value.casefold() for value in values})
+
+
+def test_expansion_does_not_pad_existing_tags_with_generic_suffixes():
+    rejected_phrases = {
+        "in a narrative scene",
+        "during changing weather",
+        "as the pivotal moment",
+        "with contemporary refinement",
+        "emotionally layered",
+        "with atmospheric diffusion",
+        "with layered depth",
+        "with nuanced tonal contrast",
+        "with tactile micro-detail",
+    }
+    for values in config.TAGS.values():
+        for value in values:
+            assert not any(phrase in value for phrase in rejected_phrases)
