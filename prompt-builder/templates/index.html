@@ -263,9 +263,13 @@
         <section class="panel" aria-labelledby="tags-heading">
           <div class="panel-heading-row">
             <h2 id="tags-heading" class="panel-title">Tags</h2>
-            <button type="button" class="btn tags-randomize-btn" id="tags-randomize-btn">
-              Randomize All
-            </button>
+            <div class="tags-global-actions" aria-label="All tag controls">
+              <button type="button" class="btn tags-lock-all-btn">Lock All</button>
+              <button type="button" class="btn tags-unlock-all-btn">Unlock All</button>
+              <button type="button" class="btn tags-randomize-btn" id="tags-randomize-btn">
+                Randomize All
+              </button>
+            </div>
           </div>
           <div class="tag-card-grid">
           {% for category, values in tags.items() %}
@@ -379,6 +383,8 @@
           {% endfor %}
           </div>
           <div class="tags-bottom-actions">
+            <button type="button" class="btn tags-lock-all-btn">Lock All</button>
+            <button type="button" class="btn tags-unlock-all-btn">Unlock All</button>
             <button type="button" class="btn tags-randomize-btn">
               Randomize All
             </button>
@@ -644,6 +650,6 @@
     <script>
       window.CATEGORY_TEMPLATES = {{ category_templates | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='22') }}" defer></script>
+    <script src="{{ url_for('static', filename='script.js', v='23') }}" defer></script>
   </body>
 </html>

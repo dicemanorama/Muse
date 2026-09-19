@@ -122,6 +122,12 @@
   const tagsRandomizeBtns = Array.from(
     document.querySelectorAll(".tags-randomize-btn")
   );
+  const tagsLockAllBtns = Array.from(
+    document.querySelectorAll(".tags-lock-all-btn")
+  );
+  const tagsUnlockAllBtns = Array.from(
+    document.querySelectorAll(".tags-unlock-all-btn")
+  );
   const platformSettingsToggle = document.getElementById(
     "platform-settings-toggle"
   );
@@ -1451,6 +1457,29 @@
       } else {
         lockedTagCategories.delete(category);
       }
+    });
+  });
+
+  function setAllCategoryLocks(shouldLock) {
+    lockedTagCategories.clear();
+    tagCategoryLockEls.forEach(function (lockEl) {
+      const category = (lockEl.getAttribute("data-category") || "").trim();
+      lockEl.checked = shouldLock;
+      if (shouldLock && category) {
+        lockedTagCategories.add(category);
+      }
+    });
+  }
+
+  tagsLockAllBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setAllCategoryLocks(true);
+    });
+  });
+
+  tagsUnlockAllBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setAllCategoryLocks(false);
     });
   });
 

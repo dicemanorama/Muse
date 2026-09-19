@@ -317,9 +317,15 @@ body {
   border-color: transparent;
 }
 
+.tags-global-actions,
 .tags-bottom-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   justify-content: flex-end;
+}
+
+.tags-bottom-actions {
   margin-top: 0.9rem;
 }
 
@@ -755,6 +761,18 @@ body {
   .tag-group-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .tags-global-actions,
+  .tags-bottom-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .tags-global-actions .btn,
+  .tags-bottom-actions .btn {
+    padding-inline: 0.55rem;
   }
 
   .tag-card-actions {

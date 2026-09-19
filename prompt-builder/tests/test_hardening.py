@@ -21,6 +21,15 @@ def _allowed_model(client):
     return data["models"][0]["name"]
 
 
+def test_index_renders_lock_and_unlock_all_controls(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.data.count(b"tags-lock-all-btn") == 2
+    assert response.data.count(b"tags-unlock-all-btn") == 2
+
+
 def test_invalid_model_is_rejected_before_completion(monkeypatch):
     client = _client(monkeypatch)
 
