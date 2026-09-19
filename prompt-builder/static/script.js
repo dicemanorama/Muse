@@ -1721,6 +1721,18 @@
       const customTags = (selectedCustomTagsByCategory.get(category) || []).slice();
       const templateIds = (selectedTemplatesByCategory.get(category) || []).slice();
       const templateTags = (selectedTemplateTagsByCategory.get(category) || []).slice();
+      const templateMap = getCategoryTemplateMap(category);
+      const selectedTemplates = templateIds
+        .map(function (templateId) {
+          const template = templateMap.get(templateId);
+          if (!template) return null;
+          return {
+            id: template.id,
+            label: template.label,
+            tags: Array.isArray(template.tags) ? template.tags.slice() : [],
+          };
+        })
+        .filter(Boolean);
       const allTags = [];
       predefinedTags.concat(customTags, templateTags).forEach(function (tag) {
         const safe = String(tag || "").trim();
@@ -1731,6 +1743,7 @@
         custom_tags: customTags,
         template_ids: templateIds,
         template_tags: templateTags,
+        selected_templates: selectedTemplates,
         all_tags: allTags,
       };
     });

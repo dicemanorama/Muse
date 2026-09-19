@@ -78,6 +78,73 @@ def test_build_user_prompt_orders_midjourney_categories_without_flat_duplicate()
     assert "subject and action first" in prompt
 
 
+def test_build_user_prompt_preserves_multiple_named_subject_templates():
+    prompt = app_module.build_user_prompt(
+        ["red scarf", "round glasses", "blue jacket", "freckles"],
+        "Both people are adjusting their goggles.",
+        selected_by_category={
+            "Subject": {
+                "all_tags": ["red scarf", "round glasses", "blue jacket", "freckles"],
+                "predefined_tags": [],
+                "custom_tags": [],
+                "selected_templates": [
+                    {
+                        "id": "oliver-id",
+                        "label": "Oliver",
+                        "tags": ["red scarf", "round glasses"],
+                    },
+                    {
+                        "id": "me-id",
+                        "label": "Me",
+                        "tags": ["blue jacket", "freckles"],
+                    },
+                ],
+            }
+        },
+        output_mode="mj",
+    )
+
+    assert 'Subject template "Oliver": red scarf, round glasses' in prompt
+    assert 'Subject template "Me": blue jacket, freckles' in prompt
+    assert "Every named Subject template is a separate required subject" in prompt
+    assert "Subject: red scarf, round glasses, blue jacket, freckles" not in prompt
+
+
+def test_generate_keeps_named_subject_template_groups(monkeypatch):
+    client = _client(monkeypatch)
+    model = _allowed_model(client)
+
+    def fake_stream(model_name, system, user):
+        assert model_name == model
+        assert 'Subject template "Oliver": red scarf' in user
+        assert 'Subject template "Me": blue jacket' in user
+        assert "each template is a required, distinct subject" in system
+        yield "Oliver in a red scarf beside Me in a blue jacket"
+
+    monkeypatch.setattr(app_module, "_llm_stream", fake_stream)
+    response = client.post(
+        "/generate",
+        json={
+            "model": model,
+            "output_mode": "mj",
+            "selected_by_category": {
+                "Subject": {
+                    "all_tags": ["red scarf", "blue jacket"],
+                    "template_ids": ["oliver-id", "me-id"],
+                    "template_tags": ["red scarf", "blue jacket"],
+                    "selected_templates": [
+                        {"id": "oliver-id", "label": "Oliver", "tags": ["red scarf"]},
+                        {"id": "me-id", "label": "Me", "tags": ["blue jacket"]},
+                    ],
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Oliver" in response.data
+
+
 def test_invalid_json_is_rejected(monkeypatch):
     client = _client(monkeypatch)
     resp = client.post(

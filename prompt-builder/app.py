@@ -413,6 +413,27 @@ def _clean_string_list(raw) -> list[str]:
     return out
 
 
+def _clean_selected_templates(raw) -> list[dict[str, object]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        template_id_raw = item.get("id")
+        label_raw = item.get("label")
+        template_id = template_id_raw.strip() if isinstance(template_id_raw, str) else ""
+        label = label_raw.strip() if isinstance(label_raw, str) else ""
+        tags = _clean_string_list(item.get("tags"))
+        identity = template_id or label.casefold()
+        if not label or not identity or identity in seen:
+            continue
+        seen.add(identity)
+        out.append({"id": template_id, "label": label, "tags": tags})
+    return out
+
+
 def build_user_prompt(
     tags: list[str],
     free_text: str,
@@ -424,15 +445,58 @@ def build_user_prompt(
 
     if isinstance(selected_by_category, dict) and selected_by_category:
         category_parts: list[str] = []
+        template_parts: list[str] = []
+        named_subject_count = 0
         for category in _ordered_prompt_categories():
             raw_entry = selected_by_category.get(category)
             if not isinstance(raw_entry, dict):
                 continue
             merged_items = _clean_string_list(raw_entry.get("all_tags"))
-            if merged_items:
-                category_parts.append(f"{category}: {', '.join(merged_items)}")
+            selected_templates = _clean_selected_templates(raw_entry.get("selected_templates"))
+            if not selected_templates:
+                if merged_items:
+                    category_parts.append(f"{category}: {', '.join(merged_items)}")
+                continue
+
+            grouped_tag_keys = {
+                tag.casefold()
+                for template in selected_templates
+                for tag in template["tags"]
+                if isinstance(tag, str)
+            }
+            direct_items: list[str] = []
+            for tag in (
+                _clean_string_list(raw_entry.get("predefined_tags"))
+                + _clean_string_list(raw_entry.get("custom_tags"))
+                + merged_items
+            ):
+                key = tag.casefold()
+                if key not in grouped_tag_keys and key not in {
+                    existing.casefold() for existing in direct_items
+                }:
+                    direct_items.append(tag)
+            if direct_items:
+                category_parts.append(f"{category}: {', '.join(direct_items)}")
+
+            for template in selected_templates:
+                label = str(template["label"])
+                template_tags = [str(tag) for tag in template["tags"]]
+                details = ", ".join(template_tags) if template_tags else "use the named identity"
+                template_parts.append(f'- {category} template "{label}": {details}')
+                if category == "Subject":
+                    named_subject_count += 1
         if category_parts:
             parts.append("Selected tags by category:\n- " + "\n- ".join(category_parts))
+            has_category_parts = True
+        if template_parts:
+            heading = "Selected named templates (keep each template and its details together):"
+            if named_subject_count:
+                heading += (
+                    "\nEvery named Subject template is a separate required subject. Include each subject "
+                    "by its template name, keep its descriptors attached to that subject, and do not merge, "
+                    "replace, or omit any of them."
+                )
+            parts.append(heading + "\n" + "\n".join(template_parts))
             has_category_parts = True
 
     if tags and not has_category_parts:
@@ -577,12 +641,14 @@ def generate():
             custom_tags = _clean_string_list(value.get("custom_tags"))
             template_ids = _clean_string_list(value.get("template_ids"))
             template_tags = _clean_string_list(value.get("template_tags"))
+            selected_templates = _clean_selected_templates(value.get("selected_templates"))
             selected_by_category[category] = {
                 "all_tags": all_tags,
                 "predefined_tags": predefined_tags,
                 "custom_tags": custom_tags,
                 "template_ids": template_ids,
                 "template_tags": template_tags,
+                "selected_templates": selected_templates,
             }
             tags.extend(all_tags)
     if tags:
