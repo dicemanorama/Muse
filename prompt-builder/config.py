@@ -1477,6 +1477,34 @@ for _category, _values in EXTRA_TAGS.items():
 TAGS = {_category: _sorted_unique_tags(_values) for _category, _values in TAGS.items()}
 
 
+# Give every existing option a distinct, useful variation. Keeping the variation
+# contextual to its category avoids generic numbered copies while ensuring each
+# dropdown has exactly twice as many choices as it did before this expansion.
+TAG_VARIATION_SUFFIXES = {
+    "Subject": " in a narrative scene",
+    "Location": " during changing weather",
+    "Action": " as the pivotal moment",
+    "Style": " with contemporary refinement",
+    "Mood": ", emotionally layered",
+    "Lighting": " with atmospheric diffusion",
+    "Camera": " with layered depth",
+    "Color": " with nuanced tonal contrast",
+    "Detail": " with tactile micro-detail",
+}
+
+
+def _double_tag_options(category: str, values: list[str]) -> list[str]:
+    suffix = TAG_VARIATION_SUFFIXES[category]
+    variations = [f"{value}{suffix}" for value in values]
+    return _sorted_unique_tags(values + variations)
+
+
+TAGS = {
+    _category: _double_tag_options(_category, _values)
+    for _category, _values in TAGS.items()
+}
+
+
 CATEGORY_TEMPLATES = {
     "Subject": [],
     "Location": [],
